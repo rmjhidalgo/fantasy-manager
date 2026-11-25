@@ -2,7 +2,7 @@
 
 A free, non-commercial helper for **Yahoo Fantasy Basketball** (head-to-head points leagues). It's a hobby project for personal use and a small group of friends.
 
-> **Status:** in development. The Yahoo Fantasy Sports API connection is waiting for Yahoo's approval.
+> **Status:** in development.
 
 ## What it does
 - Projects fantasy points for your roster and your weekly opponent
@@ -14,16 +14,16 @@ A free, non-commercial helper for **Yahoo Fantasy Basketball** (head-to-head poi
 
 ## How it works
 - **Runs on your computer:** each user runs the app locally, at `http://localhost`.
-- **Your own Yahoo sign-in:** each user signs in with their own Yahoo account through Yahoo's official OAuth sign-in. The app only reads leagues and teams that user belongs to.
+- **You bring your own pages:** you save your own Yahoo Fantasy pages in your browser (Ctrl+S) — your team, matchup, standings, player lists — and the app reads those saved files. It never logs in to Yahoo and never accesses Yahoo by itself.
 - **Read-only:** the app never changes your Yahoo team. You make every move yourself on Yahoo.
-- **Your data stays local:** data and sign-in tokens are stored only on your own computer. There is no central server, no tracking, no ads and no payments.
+- **Your data stays local:** all data is stored only on your own computer. There is no central server, no tracking, no ads and no payments.
 
 ## Data used
-- From the Yahoo Fantasy Sports API (read-only):
+- From Yahoo pages you save yourself:
   - league settings, standings, matchups and transactions
   - team rosters
-  - player positions, injury status, free agent/waiver status and stats
-- Public NBA schedule and game stats.
+  - player positions, status, and free agent/waiver status
+- Public NBA schedule, game stats and injury report.
 
 ## Not affiliated
 This project is not affiliated with or endorsed by Yahoo or the NBA.

@@ -1,0 +1,43 @@
+# Secrets and local config
+.env
+*.env
+!.env.example
+
+# Saved Yahoo pages (private league data, Yahoo-owned assets)
+Scoring & Settings _ Fantasy Basketball _ Yahoo! Sports.html
+Scoring & Settings _ Fantasy Basketball _ Yahoo! Sports_files/
+reference/
+
+# Draft application (contains personal details once filled in)
+docs/yahoo_api_application.md
+
+# Planning notes (kept local for now)
+PLAN.md
+docs/STATUS.md
+
+# Local dev tool config (absolute paths)
+.claude/
+
+# Local data
+data/
+*.db
+*.sqlite
+*.sqlite3
+backups/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
