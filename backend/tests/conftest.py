@@ -6,6 +6,7 @@ import pytest
 
 # Use a throwaway data folder so tests never touch real data. Must run before `app` is imported.
 os.environ["FM_DATA_DIR"] = tempfile.mkdtemp(prefix="fm_test_")
+os.environ["FM_NO_BACKGROUND"] = "1"  # no NBA downloads or folder watching during tests
 
 from app.db import Base, engine, init_db  # noqa: E402
 

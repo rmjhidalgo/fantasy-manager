@@ -85,6 +85,78 @@ export type Overview = {
 
 export type League = { id: number; name: string | null; my_team_id: number | null; my_team_name: string | null; active: boolean };
 
+export type SideOutlook = {
+  team_id: number;
+  name: string | null;
+  current: number;
+  remaining_expected: number;
+  final_expected: number;
+  final_p10: number;
+  final_p90: number;
+  games_left: number;
+  days: { date: string; expected: number; starters: number; pending: number }[];
+};
+
+export type Outlook = {
+  today: string;
+  matchup: {
+    week: number;
+    start_date: string;
+    end_date: string;
+    as_of: string | null;
+    win_prob: number;
+    me: SideOutlook;
+    opp: SideOutlook;
+    notes: string[];
+  } | null;
+  roster: {
+    player_id: number;
+    slot: string;
+    name: string;
+    fpts: number | null;
+    sd: number | null;
+    play_prob: number | null;
+    source: "nba" | "yahoo" | "none";
+    recent_mpg: number | null;
+    season_mpg: number | null;
+    games_left: number | null;
+  }[];
+};
+
+export type LineupDay = {
+  date: string;
+  slots: string[];
+  best_expected: number;
+  current_expected: number;
+  players: {
+    player_id: number;
+    name: string;
+    positions: string[];
+    status: string | null;
+    current_slot: string;
+    best_slot: string | null;
+    change: "start" | "bench" | "no game" | null;
+    locked: boolean;
+    expected: number;
+    game: { opponent: string; start_utc: string | null; final: boolean; started: boolean } | null;
+  }[];
+};
+
+export type NbaStatus = {
+  refreshed_at: string | null;
+  season: string | null;
+  games: number;
+  game_logs: number;
+  last_error: string | null;
+  unmatched: {
+    yahoo_id: number;
+    name: string;
+    nba_team: string | null;
+    rostered: boolean;
+    candidates: { nba_id: number; name: string; team: string | null }[];
+  }[];
+};
+
 async function json<T>(r: Response): Promise<T> {
   if (!r.ok) {
     let detail = `${r.status}`;
@@ -117,6 +189,16 @@ export const api = {
     }
     return fetch("/api/import", { method: "POST", body: fd }).then((r) => json<{ results: ImportResult[] }>(r));
   },
+  outlook: () => fetch("/api/outlook").then((r) => json<Outlook>(r)),
+  lineup: (day?: string) => fetch(`/api/lineup${day ? `?day=${day}` : ""}`).then((r) => json<LineupDay>(r)),
+  nbaStatus: () => fetch("/api/nba/status").then((r) => json<NbaStatus>(r)),
+  nbaRefresh: () => fetch("/api/nba/refresh", { method: "POST" }).then((r) => json<Record<string, unknown>>(r)),
+  setPlayerMap: (yahoo_id: number, nba_id: number | null) =>
+    fetch("/api/player-map", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ yahoo_id, nba_id }),
+    }).then((r) => json<{ ok: boolean }>(r)),
   watchFolder: () => fetch("/api/watch-folder").then((r) => json<WatchFolder>(r)),
   setWatchFolder: (folder: string | null) =>
     fetch("/api/watch-folder", {

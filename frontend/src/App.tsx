@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type League, type Overview } from "./api";
+import { api, type League, type Outlook, type Overview } from "./api";
 import ImportPage from "./pages/ImportPage";
 import OverviewPage from "./pages/OverviewPage";
 
@@ -10,6 +10,7 @@ type Health = { status: string; version: string; database: string };
 export default function App() {
   const [tab, setTab] = useState<Tab>("overview");
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [outlook, setOutlook] = useState<Outlook | null>(null);
   const [leagues, setLeagues] = useState<League[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
   const [backendDown, setBackendDown] = useState(false);
@@ -23,6 +24,10 @@ export default function App() {
       })
       .catch(() => setBackendDown(true));
     api.leagues().then((r) => setLeagues(r.leagues)).catch(() => {});
+    api
+      .outlook()
+      .then(setOutlook)
+      .catch(() => setOutlook(null)); // no league yet, or no NBA data yet
   }, []);
 
   useEffect(() => {
@@ -59,7 +64,7 @@ export default function App() {
           {(
             [
               ["overview", "Overview"],
-              ["import", "Import"],
+              ["import", "Import & data"],
             ] as [Tab, string][]
           ).map(([key, label]) => (
             <button
@@ -84,7 +89,7 @@ export default function App() {
           </p>
         )}
         {tab === "overview" ? (
-          <OverviewPage data={overview} onGoImport={() => setTab("import")} />
+          <OverviewPage data={overview} outlook={outlook} onGoImport={() => setTab("import")} />
         ) : (
           <ImportPage onImported={refresh} />
         )}

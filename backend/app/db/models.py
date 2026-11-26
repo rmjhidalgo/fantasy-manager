@@ -130,6 +130,58 @@ class Matchup(Base):
     as_of: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+class NbaGame(Base):
+    __tablename__ = "nba_games"
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # NBA gameId
+    date_et: Mapped[str] = mapped_column(String, index=True)  # US Eastern date, YYYY-MM-DD
+    start_utc: Mapped[datetime | None] = mapped_column(DateTime)
+    home: Mapped[str] = mapped_column(String)  # team tricode
+    away: Mapped[str] = mapped_column(String)
+    status: Mapped[int] = mapped_column(Integer)  # 1 scheduled, 2 live, 3 final
+    regular_season: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class NbaPlayer(Base):
+    __tablename__ = "nba_players"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)  # NBA personId
+    name: Mapped[str] = mapped_column(String)
+    team: Mapped[str | None] = mapped_column(String)
+
+
+class GameLog(Base):
+    """One finished game for one player."""
+
+    __tablename__ = "game_logs"
+    player_id: Mapped[int] = mapped_column(Integer, primary_key=True)  # NBA personId
+    game_id: Mapped[str] = mapped_column(String, primary_key=True)
+    date_et: Mapped[str] = mapped_column(String, index=True)
+    team: Mapped[str | None] = mapped_column(String)
+    min: Mapped[float | None] = mapped_column(Float)
+    pts: Mapped[float] = mapped_column(Float, default=0)
+    reb: Mapped[float] = mapped_column(Float, default=0)
+    ast: Mapped[float] = mapped_column(Float, default=0)
+    stl: Mapped[float] = mapped_column(Float, default=0)
+    blk: Mapped[float] = mapped_column(Float, default=0)
+    tov: Mapped[float] = mapped_column(Float, default=0)
+    fg3m: Mapped[float] = mapped_column(Float, default=0)
+    fgm: Mapped[float] = mapped_column(Float, default=0)
+    fga: Mapped[float] = mapped_column(Float, default=0)
+    ftm: Mapped[float] = mapped_column(Float, default=0)
+    fta: Mapped[float] = mapped_column(Float, default=0)
+    oreb: Mapped[float] = mapped_column(Float, default=0)
+    dreb: Mapped[float] = mapped_column(Float, default=0)
+    pf: Mapped[float] = mapped_column(Float, default=0)
+
+
+class PlayerMap(Base):
+    """Links a Yahoo player to an NBA player. method: auto | manual | none (manually marked as no match)."""
+
+    __tablename__ = "player_map"
+    yahoo_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nba_id: Mapped[int | None] = mapped_column(Integer)
+    method: Mapped[str] = mapped_column(String)
+
+
 class Transaction(Base):
     __tablename__ = "transactions"
     __table_args__ = (UniqueConstraint("league_id", "team_name", "when_text", "description"),)

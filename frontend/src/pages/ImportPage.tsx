@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type ImportHistoryRow, type ImportResult, type WatchFolder } from "../api";
+import { api, type ImportHistoryRow, type ImportResult, type NbaStatus, type WatchFolder } from "../api";
 import { formatWhen } from "../time";
 
 const ACCEPT = ".mhtml,.mht,.html,.htm";
@@ -94,6 +94,8 @@ export default function ImportPage({ onImported }: { onImported: () => void }) {
       )}
 
       <WatchFolderCard onImported={onImported} />
+
+      <NbaDataCard onChanged={onImported} />
 
       <HowToSave />
 
@@ -245,6 +247,102 @@ function WatchFolderCard({ onImported }: { onImported: () => void }) {
           <h3 className="mb-2 text-sm font-medium text-slate-500">Imported from the folder</h3>
           <ResultList results={wf.recent.slice(0, 5)} />
         </div>
+      )}
+    </section>
+  );
+}
+
+function NbaDataCard({ onChanged }: { onChanged: () => void }) {
+  const [st, setSt] = useState<NbaStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api.nbaStatus().then(setSt).catch(() => {});
+  }, []);
+  useEffect(load, [load]);
+
+  const refresh = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.nbaRefresh();
+      load();
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const link = async (yahooId: number, value: string) => {
+    if (!value) return;
+    await api.setPlayerMap(yahooId, value === "none" ? null : Number(value));
+    load();
+    onChanged();
+  };
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-semibold">NBA data</h2>
+        <button
+          onClick={refresh}
+          disabled={busy}
+          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
+        >
+          {busy ? "Downloading…" : "Refresh now"}
+        </button>
+      </div>
+      <p className="mb-2 text-sm text-slate-500">
+        Schedule and box scores download automatically from NBA.com every 3 hours while the app runs.
+      </p>
+      {st && (
+        <p className="text-sm">
+          {st.refreshed_at ? (
+            <>
+              Updated {formatWhen(st.refreshed_at)} · season {st.season} · {st.games} games · {st.game_logs} player box scores
+            </>
+          ) : (
+            <span className="text-amber-700 dark:text-amber-400">Not downloaded yet.</span>
+          )}
+        </p>
+      )}
+      {(error || st?.last_error) && (
+        <p className="mt-1 text-sm text-red-600 dark:text-red-400">Last download failed: {error ?? st?.last_error}</p>
+      )}
+      {st && st.unmatched.length > 0 && (
+        <div className="mt-3">
+          <h3 className="mb-1 text-sm font-medium">Players not matched to NBA stats ({st.unmatched.length})</h3>
+          <p className="mb-2 text-xs text-slate-500">Pick the right NBA player so projections can use his box scores.</p>
+          <ul className="space-y-1 text-sm">
+            {st.unmatched.map((u) => (
+              <li key={u.yahoo_id} className="flex flex-wrap items-center gap-2">
+                <span className="min-w-40">
+                  {u.name} <span className="text-slate-500">({u.nba_team ?? "?"})</span>
+                  {u.rostered && <span className="ml-1 text-xs text-amber-700 dark:text-amber-400">rostered</span>}
+                </span>
+                <select
+                  defaultValue=""
+                  onChange={(e) => link(u.yahoo_id, e.target.value)}
+                  className="rounded-md border border-slate-300 bg-transparent px-2 py-1 text-sm dark:border-slate-700"
+                >
+                  <option value="">Choose…</option>
+                  {u.candidates.map((c) => (
+                    <option key={c.nba_id} value={c.nba_id}>
+                      {c.name} ({c.team ?? "no team"})
+                    </option>
+                  ))}
+                  <option value="none">No NBA match</option>
+                </select>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {st && st.refreshed_at && st.unmatched.length === 0 && (
+        <p className="mt-1 text-sm text-green-700 dark:text-green-400">✓ Every imported Yahoo player is matched to NBA stats.</p>
       )}
     </section>
   );
