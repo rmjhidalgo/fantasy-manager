@@ -65,6 +65,7 @@ class MatchupOutlook:
     win_prob: float
     projections: dict[int, Projection]
     notes: list[str]
+    sim_stats: dict[str, tuple[float, float]] = field(default_factory=dict)  # side -> (mean, variance) of final score
 
 
 def _roster(db: Session, league_id: int, team_id: int) -> dict[int, RosterSlot]:
@@ -82,7 +83,9 @@ def plan_days(
     days: list[date],
     snapshot: datetime | None,
     actual_fp: dict[tuple[int, str], float],
+    page_ok: bool = True,
 ) -> list[DayPlan]:
+    """page_ok=False: always optimize (the roster differs from the imported page, e.g. after a suggested move)."""
     snap_day = today_et(snapshot) if snapshot else None
     plans = []
     for d in days:
@@ -95,7 +98,7 @@ def plan_days(
                 continue
             open_games[pid] = g
 
-        use_page = d == snap_day and any(r.as_of and today_et(r.as_of) == snap_day for r in roster.values())
+        use_page = page_ok and d == snap_day and any(r.as_of and today_et(r.as_of) == snap_day for r in roster.values())
         if use_page:
             lineup = {pid: r.slot for pid, r in roster.items() if r.slot not in INACTIVE_SLOTS and pid in open_games}
             bench = [pid for pid in open_games if pid not in lineup and proj[pid].play_prob > 0]
@@ -152,7 +155,18 @@ def _actual_points(db: Session, league: League, yahoo_ids: list[int], start: dat
     return {(yahoo_of[g.player_id], g.game_id): fantasy_points(g, weights) for g in logs}
 
 
-def matchup_outlook(db: Session, league: League, team_id: int, now_utc: datetime | None = None, seed: int = 7) -> MatchupOutlook | None:
+@dataclass
+class RosterMove:
+    """From `day` on, `add` is on the roster instead of `drop` (None: an empty spot is used)."""
+
+    day: date
+    add: int
+    drop: int | None
+
+
+def matchup_outlook(db: Session, league: League, team_id: int, now_utc: datetime | None = None, seed: int = 7,
+                    moves: list[RosterMove] | None = None, extra_proj: dict[int, Projection] | None = None) -> MatchupOutlook | None:
+    """This week's projected finals and chance to win; `moves` tries roster changes on my side."""
     mu = db.scalar(
         select(Matchup).where(Matchup.league_id == league.id, Matchup.team_id == team_id).order_by(Matchup.week.desc()).limit(1)
     )
@@ -171,13 +185,26 @@ def matchup_outlook(db: Session, league: League, team_id: int, now_utc: datetime
     opp_roster = _roster(db, league.id, mu.opp_team_id)
     ids = list(my_roster) + list(opp_roster)
     proj = project_players(db, league, ids, today)
+    if extra_proj:
+        proj.update(extra_proj)
     actual = _actual_points(db, league, ids, start, end)
 
-    my_days = plan_days(proj, my_roster, slots, sched, days, mu.as_of, actual)
+    if moves:
+        my_days = []
+        for d in days:
+            roster_d = dict(my_roster)
+            for m in moves:
+                if d >= m.day:
+                    if m.drop is not None:
+                        roster_d.pop(m.drop, None)
+                    roster_d[m.add] = RosterSlot(league_id=league.id, team_id=team_id, player_id=m.add, slot="BN")
+            my_days += plan_days(proj, roster_d, slots, sched, [d], mu.as_of, actual, page_ok=roster_d.keys() == my_roster.keys())
+    else:
+        my_days = plan_days(proj, my_roster, slots, sched, days, mu.as_of, actual)
     opp_days = plan_days(proj, opp_roster, slots, sched, days, mu.as_of, actual)
-    rng = np.random.default_rng(seed)
-    my_sim = (mu.score or 0) + _simulate(my_days, proj, sched, rng)
-    opp_sim = (mu.opp_score or 0) + _simulate(opp_days, proj, sched, rng)
+    # Separate random streams per side: trying a move on my side leaves the opponent's draws unchanged.
+    my_sim = (mu.score or 0) + _simulate(my_days, proj, sched, np.random.default_rng(seed))
+    opp_sim = (mu.opp_score or 0) + _simulate(opp_days, proj, sched, np.random.default_rng(seed + 1))
     win = float(np.mean(my_sim > opp_sim) + 0.5 * np.mean(my_sim == opp_sim))
 
     def outlook(tid: int, current: float | None, plans: list[DayPlan], sims: np.ndarray) -> TeamOutlook:
@@ -216,4 +243,5 @@ def matchup_outlook(db: Session, league: League, team_id: int, now_utc: datetime
         win_prob=round(win, 3),
         projections=proj,
         notes=notes,
+        sim_stats={"me": (float(my_sim.mean()), float(my_sim.var())), "opp": (float(opp_sim.mean()), float(opp_sim.var()))},
     )

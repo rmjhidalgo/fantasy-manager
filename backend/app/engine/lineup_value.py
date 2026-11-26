@@ -24,7 +24,7 @@ class LineupValue:
         self.now = now_utc
         self.today = today
         self._vals: dict[int, list[float]] = {}
-        self._memo: dict[tuple[int, frozenset[int]], float] = {}
+        self._memo: dict[tuple[int, frozenset[int]], tuple[float, float]] = {}
 
     def has_open_game(self, pid: int, i: int) -> bool:
         """A game on day i that hasn't started yet."""
@@ -50,16 +50,32 @@ class LineupValue:
         stop = len(self.days) if end is None else end
         return sum(1 for i in range(start, stop) if self.has_open_game(pid, i))
 
-    def day_total(self, i: int, pids: Iterable[int]) -> float:
+    def _variance(self, pid: int, i: int) -> float:
+        """Spread of his points that day: plays with chance q, then scores around his projection."""
+        p = self.proj[pid]
+        mean = self.values(pid)[i]
+        q = mean / p.fpts if p.fpts else 0.0
+        return q * (p.sd**2 + p.fpts**2) - mean**2
+
+    def day_stats(self, i: int, pids: Iterable[int]) -> tuple[float, float]:
+        """(expected points, variance) of the best lineup on day i from these players."""
         key = (i, frozenset(p for p in pids if self.values(p)[i] > 0))
         if key not in self._memo:
             cands = [Candidate(p, self.proj[p].positions, self.values(p)[i]) for p in key[1]]
-            self._memo[key] = optimize_day(self.slots, cands).expected
+            best = optimize_day(self.slots, cands)
+            self._memo[key] = (best.expected, sum(self._variance(p, i) for p in best.assignments))
         return self._memo[key]
+
+    def day_total(self, i: int, pids: Iterable[int]) -> float:
+        return self.day_stats(i, pids)[0]
 
     def total(self, timeline: list[set[int]]) -> float:
         """timeline[i] = the players on the roster on day i."""
         return sum(self.day_total(i, ids) for i, ids in enumerate(timeline))
+
+    def total_stats(self, timeline: list[set[int]]) -> tuple[float, float]:
+        stats = [self.day_stats(i, ids) for i, ids in enumerate(timeline)]
+        return sum(s[0] for s in stats), sum(s[1] for s in stats)
 
     def first_day_index(self, available_from: date | None) -> int | None:
         """Index of the first day a player can be used, or None if not within these days."""

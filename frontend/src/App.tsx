@@ -7,11 +7,13 @@ import LineupPage from "./pages/LineupPage";
 import MatchupPage from "./pages/MatchupPage";
 import OverviewPage, { type NavTarget } from "./pages/OverviewPage";
 import StreamingPage from "./pages/StreamingPage";
+import SuggestPage from "./pages/SuggestPage";
 
 type Tab = "overview" | NavTarget;
 
 const TABS: [Tab, string][] = [
   ["overview", "Overview"],
+  ["suggest", "Suggested moves"],
   ["matchup", "Matchup"],
   ["lineup", "Lineup"],
   ["free-agents", "Free agents"],
@@ -120,6 +122,7 @@ export default function App() {
           </p>
         )}
         {tab === "overview" && <OverviewPage data={overview} outlook={outlook} alerts={alerts} onNavigate={setTab} />}
+        {tab === "suggest" && <SuggestPage key={version} outlook={outlook} />}
         {tab === "matchup" && <MatchupPage version={version} />}
         {tab === "lineup" && <LineupPage outlook={outlook} />}
         {tab === "free-agents" && <FreeAgentsPage key={version} />}

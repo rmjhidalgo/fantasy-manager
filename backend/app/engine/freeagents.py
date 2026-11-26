@@ -22,6 +22,7 @@ from app.engine.lineup_value import LineupValue
 from app.engine.pool import PoolInfo, PoolPlayer, available_pool
 from app.engine.projections import Projection, project_nba_players, project_players
 from app.engine.schedule import Schedule, date_range, today_et
+from app.engine.untouchables import get_untouchables
 
 NOT_ON_ROSTER_SLOTS = {"IL", "IL+", "NA"}  # these slots don't use a regular roster spot
 DROP_CANDIDATES = 4  # consider dropping only your lowest-projected players
@@ -44,14 +45,16 @@ class TeamContext:
     pool: list[PoolPlayer]
     pool_info: PoolInfo
     lv: LineupValue
+    untouchable: set[int]
 
     @property
     def open_spots(self) -> int:
         return max(0, self.capacity - len(self.active_ids))
 
-    def droppable(self) -> list[int]:
-        ranked = sorted(self.active_ids, key=lambda pid: self.proj[pid].fpts if pid in self.proj else 0)
-        return ranked[:DROP_CANDIDATES]
+    def droppable(self, n: int = DROP_CANDIDATES) -> list[int]:
+        """Your lowest-projected players (per game), never an untouchable."""
+        ranked = sorted((p for p in self.active_ids if p not in self.untouchable), key=lambda pid: self.proj[pid].fpts)
+        return ranked[:n]
 
     def available_from(self, pp: PoolPlayer) -> date:
         if pp.kind == "W" and pp.waiver_until:
@@ -76,10 +79,13 @@ def window_days(db: Session, league: League, team_id: int, window: str, today: d
     return date_range(today, today + timedelta(days=n - 1)), f"Next {n} days"
 
 
-def build_context(db: Session, league: League, team_id: int, window: str = "week", now_utc: datetime | None = None) -> TeamContext:
+def build_context(db: Session, league: League, team_id: int, window: str = "week", now_utc: datetime | None = None,
+                  days: list[date] | None = None, label: str | None = None) -> TeamContext:
+    """Everything needed to value roster moves over some days (a named window, or the given days)."""
     now = now_utc or datetime.now(UTC).replace(tzinfo=None)
     today = today_et(now)
-    days, label = window_days(db, league, team_id, window, today)
+    if days is None:
+        days, label = window_days(db, league, team_id, window, today)
     settings = json.loads(league.settings_json) if league.settings_json else {}
     positions = settings.get("roster_positions") or []
     slots = active_slots(positions)
@@ -91,8 +97,8 @@ def build_context(db: Session, league: League, team_id: int, window: str = "week
     proj.update(project_nba_players(db, league, [p.nba_id for p in pool if p.source == "nba" and p.nba_id], today))
     sched = Schedule(db, days[0] - timedelta(days=1), days[-1]) if days else Schedule(db, today, today)
     active = [r.player_id for r in roster if r.slot not in NOT_ON_ROSTER_SLOTS and r.player_id in proj]
-    return TeamContext(league, team_id, today, now, days, label, slots, capacity, list(roster), active, proj, pool, info,
-                       LineupValue(slots, sched, days, proj, now, today))
+    return TeamContext(league, team_id, today, now, days, label or "", slots, capacity, list(roster), active, proj, pool, info,
+                       LineupValue(slots, sched, days, proj, now, today), get_untouchables(db, league.id, team_id))
 
 
 def best_add(ctx: TeamContext, pid: int, start: int, base_timeline: list[set[int]], drops: list[int],

@@ -258,6 +258,52 @@ export type Streaming = {
   }[];
 };
 
+export type Horizon = "A" | "B" | "C" | "D";
+
+export type Suggestions = {
+  horizon: Horizon;
+  horizon_name: string;
+  label: string;
+  days: string[];
+  weeks: { week: number | null; start: string; end: string }[];
+  budget: number;
+  adds: Adds;
+  notes: string[];
+  warnings?: string[];
+  untouchable?: number[];
+  drop_candidates?: { id: number; name: string; fpts: number }[];
+  il_moves: { player_id: number; name: string; status: string }[];
+  baseline: number;
+  with_moves: number;
+  win_before: number | null;
+  win_after: number | null;
+  min_gain: number;
+  team_url: string;
+  moves: {
+    add: {
+      id: number;
+      yahoo_id: number | null;
+      name: string;
+      nba_team: string | null;
+      positions: string[];
+      positions_estimated: boolean;
+      status: string | null;
+      fpts: number;
+      kind: "FA" | "W" | "?";
+      source: string;
+    };
+    drop: { id: number; name: string; fpts: number; status: string | null } | null;
+    type: "add" | "add/drop" | "waiver claim";
+    first_day: string;
+    games: number;
+    games_dropped: number;
+    gain: number;
+    win_change: number | null;
+    reasons: string[];
+    yahoo_url: string;
+  }[];
+};
+
 export type MatchupSide = {
   team_id: number;
   name: string | null;
@@ -344,6 +390,14 @@ export const api = {
   },
   outlook: () => fetch("/api/outlook").then((r) => json<Outlook>(r)),
   lineup: (day?: string) => fetch(`/api/lineup${day ? `?day=${day}` : ""}`).then((r) => json<LineupDay>(r)),
+  suggestions: (horizon: Horizon) => fetch(`/api/suggestions?horizon=${horizon}`).then((r) => json<Suggestions>(r)),
+  untouchables: () => fetch("/api/untouchables").then((r) => json<{ player_ids: number[] }>(r)),
+  setUntouchables: (player_ids: number[]) =>
+    fetch("/api/untouchables", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ player_ids }),
+    }).then((r) => json<{ player_ids: number[] }>(r)),
   matchup: () => fetch("/api/matchup").then((r) => json<MatchupDetail>(r)),
   alerts: () => fetch("/api/alerts").then((r) => json<{ league_id: number; alerts: AlertItem[] }>(r)),
   freeAgents: (window: string, position: string) =>

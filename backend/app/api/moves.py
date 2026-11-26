@@ -16,6 +16,8 @@ from app.engine.freeagents import current_week, rank_free_agents
 from app.engine.schedule import today_et
 from app.engine.simulator import matchup_outlook
 from app.engine.streaming import streaming_plan
+from app.engine.suggest import suggest_moves
+from app.engine.untouchables import get_untouchables, set_untouchables
 
 router = APIRouter(prefix="/api")
 
@@ -79,6 +81,37 @@ def streaming(adds_left: int | None = None) -> dict:
         m["yahoo_url"] = yahoo_links.player_url(lg.id, m["add"]["yahoo_id"], m["add"]["name"])
     r["adds"] = adds
     return r
+
+
+@router.get("/suggestions")
+def suggestions(horizon: str = Query("A", pattern=r"^[ABCD]$")) -> dict:
+    with SessionLocal() as db:
+        lg = _active_league(db)
+        team_id = _my_team(lg)
+        r = suggest_moves(db, lg, team_id, horizon)
+    for m in r["moves"]:
+        m["yahoo_url"] = yahoo_links.player_url(lg.id, m["add"]["yahoo_id"], m["add"]["name"])
+    r["team_url"] = yahoo_links.team_url(lg.id, team_id)
+    return r
+
+
+class UntouchableBody(BaseModel):
+    player_ids: list[int]
+
+
+@router.get("/untouchables")
+def get_untouchable() -> dict:
+    with SessionLocal() as db:
+        lg = _active_league(db)
+        return {"player_ids": sorted(get_untouchables(db, lg.id, _my_team(lg)))}
+
+
+@router.put("/untouchables")
+def put_untouchable(body: UntouchableBody) -> dict:
+    with SessionLocal() as db:
+        lg = _active_league(db)
+        set_untouchables(db, lg.id, _my_team(lg), set(body.player_ids))
+        return {"player_ids": sorted(get_untouchables(db, lg.id, _my_team(lg)))}
 
 
 @router.get("/alerts")

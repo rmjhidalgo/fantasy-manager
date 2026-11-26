@@ -3,7 +3,7 @@ import AlertsCard from "../components/AlertsCard";
 import { formatWhen, hoursOld } from "../time";
 import { card, dayLabel } from "../ui";
 
-export type NavTarget = "matchup" | "lineup" | "streaming" | "import" | "free-agents";
+export type NavTarget = "suggest" | "matchup" | "lineup" | "streaming" | "import" | "free-agents";
 
 const FRESHNESS_LABELS: [keyof NonNullable<Overview["freshness"]>, string, number][] = [
   // key, label, hours after which it's shown as stale
