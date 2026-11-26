@@ -201,10 +201,46 @@ class WeekMatchup:
 
 
 @dataclass
+class TeamSchedule:
+    """One team's season schedule, from the Schedule tab of the League page (one team shown at a time)."""
+
+    team_id: int
+    weeks: dict[int, int]  # week -> opponent team id
+
+
+@dataclass
 class LeagueHomePage:
     standings: list[StandingRow]
     transactions: list[TransactionRow]
     matchups: list[WeekMatchup] = field(default_factory=list)
+    schedule: TeamSchedule | None = None
+
+
+def _team_schedule(soup: BeautifulSoup, league_id: int) -> TeamSchedule | None:
+    """The Schedule tab: a team picker (the shown team's entry isn't a link-style item) and a Wk / Opponent table."""
+    sec = soup.find(id="lhstschedtab")
+    if sec is None:
+        return None
+    team_id = None
+    for a in sec.find_all("a", href=re.compile(r"sctype=team&(amp;)?scmid=\d+|scmid=\d+")):
+        classes = set(a.get("class", [])) | set(a.parent.get("class", []) if a.parent else [])
+        if "Linkable" not in classes:  # every other team is "Linkable"; the shown one isn't
+            m = re.search(r"scmid=(\d+)", a["href"])
+            team_id = int(m.group(1)) if m else None
+            break
+    weeks: dict[int, int] = {}
+    for tr in sec.find_all("tr"):
+        tds = tr.find_all("td")
+        if len(tds) < 2:
+            continue
+        wk = intnum(_text(tds[0]))
+        opp = next((_team_id_from_href(a["href"], league_id) for a in tds[1].find_all("a", href=True)
+                    if _team_id_from_href(a["href"], league_id) is not None), None)
+        if wk is not None and opp is not None:
+            weeks[wk] = opp
+    if team_id is None or not weeks:
+        return None
+    return TeamSchedule(team_id, weeks)
 
 
 def _league_matchups(soup: BeautifulSoup, league_id: int) -> list[WeekMatchup]:
@@ -215,7 +251,10 @@ def _league_matchups(soup: BeautifulSoup, league_id: int) -> list[WeekMatchup]:
     """
     out: list[WeekMatchup] = []
     seen: set[tuple[int, int, int]] = set()
+    sched = soup.find(id="lhstschedtab")  # the Schedule tab also links to matchups (one team's season): not this box
     for a in soup.find_all("a", href=re.compile(r"matchup\?.*week=\d+.*mid1=\d+.*mid2=\d+")):
+        if sched is not None and sched in a.parents:
+            continue
         q = dict(re.findall(r"(week|mid1|mid2)=(\d+)", a["href"]))
         week, t1, t2 = int(q["week"]), int(q["mid1"]), int(q["mid2"])
         if (week, t1, t2) in seen:
@@ -294,7 +333,7 @@ def parse_league_home(html: str, league_id: int) -> LeagueHomePage:
             when = _text(who).replace(team_name or "", "", 1).strip() or None
             if desc:
                 txs.append(TransactionRow(team_name, when, desc))
-    return LeagueHomePage(rows, txs, _league_matchups(soup, league_id))
+    return LeagueHomePage(rows, txs, _league_matchups(soup, league_id), _team_schedule(soup, league_id))
 
 
 # ---------------------------------------------------------------- team roster

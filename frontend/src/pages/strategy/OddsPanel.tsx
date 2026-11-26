@@ -28,8 +28,15 @@ export default function OddsPanel() {
       </p>
       {me && d.what_if && (
         <Notice tone="info">
-          <b>You: {pct(me.playoff_odds)}</b>. Win this week → {pct(d.what_if.win_this_week)}, lose → {pct(d.what_if.lose_this_week)}{" "}
-          (you're {pct(d.what_if.chance_to_win_this_week)} to win it).
+          <b>You: {pct(me.playoff_odds)}</b>.{" "}
+          {d.what_if.win_this_week != null && d.what_if.lose_this_week != null ? (
+            <>
+              Win this week → {pct(d.what_if.win_this_week)}, lose → {pct(d.what_if.lose_this_week)} (you're{" "}
+              {pct(d.what_if.chance_to_win_this_week)} to win it).
+            </>
+          ) : (
+            <>This week's result is nearly certain ({pct(d.what_if.chance_to_win_this_week)} to win), so it barely changes your odds.</>
+          )}
         </Notice>
       )}
       <div className="mt-3 overflow-x-auto">

@@ -4,7 +4,7 @@ Horizons:
   A  this week      today -> end of the current week; aims at your chance to win this matchup
                     (when far ahead it prefers steady players, when behind higher-upside ones)
   B  next week      the next full week; projected points (and chance to win if next week's
-                    opponent is known from an imported Matchup page)
+                    opponent is known from the saved schedule or a Matchup page)
   C  next 5 weeks   total projected points over the next 5 weeks (longer-term value)
   D  playoffs       projected points in the playoff weeks, assuming today's injuries have
                     healed by then and weighting season-long form
@@ -24,15 +24,15 @@ import math
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import League, Matchup, RosterSlot
+from app.db.models import League
 from app.engine.adds import adds_used
 from app.engine.freeagents import TeamContext, build_context, current_week
 from app.engine.lineup import Candidate, active_slots, optimize_day
 from app.engine.lineup_value import LineupValue
 from app.engine.projections import Projection, project_players
+from app.engine.rosters import scheduled_opponent, team_rosters
 from app.engine.schedule import Schedule, date_range, today_et
 from app.engine.simulator import RosterMove, matchup_outlook
 from app.engine.weeks import playoff_weeks, weeks_after
@@ -66,11 +66,8 @@ def horizon_for(db: Session, league: League, team_id: int, key: str, today: date
     if key == "B":
         weeks = weeks_after(week, end, 1)
         w, s, e = weeks[0]
-        opp = None
-        if w is not None:
-            mu = db.scalar(select(Matchup).where(Matchup.league_id == league.id, Matchup.team_id == team_id, Matchup.week == w))
-            opp = mu.opp_team_id if mu else None
-        notes = [] if opp else ["Next week's opponent isn't known (save next week's Matchup page to see your chance to win)."]
+        opp = scheduled_opponent(db, league, team_id, w) if w is not None else None
+        notes = [] if opp else ["Next week's opponent isn't known: save your schedule (League page → Schedule tab) to see your chance to win."]
         return Horizon("B", date_range(s, e), f"Week {w}" if w else "Next week", weeks, opp, notes)
     if key == "C":
         weeks = weeks_after(week, end, 5)
@@ -349,9 +346,10 @@ def suggest_moves(db: Session, league: League, team_id: int, key: str, now_utc: 
 
 
 def _opponent_stats(db: Session, league: League, opp_id: int, ctx: TeamContext, now: datetime) -> tuple[float, float]:
-    roster = db.scalars(select(RosterSlot).where(RosterSlot.league_id == league.id, RosterSlot.team_id == opp_id)).all()
-    proj = project_players(db, league, [r.player_id for r in roster], ctx.today)
-    ids = {r.player_id for r in roster if r.slot not in ("IL", "IL+", "NA") and r.player_id in proj}
+    rosters, il = team_rosters(db, league)  # works for every team, not only those with a saved roster page
+    roster = rosters.get(opp_id, set())
+    proj = project_players(db, league, list(roster), ctx.today)
+    ids = {p for p in roster if p not in il.get(opp_id, set()) and p in proj}
     settings = json.loads(league.settings_json) if league.settings_json else {}
     sched = Schedule(db, ctx.days[0] - timedelta(days=1), ctx.days[-1])
     lv = LineupValue(active_slots(settings.get("roster_positions")), sched, ctx.days, proj, now, ctx.today)

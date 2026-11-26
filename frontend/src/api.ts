@@ -379,7 +379,7 @@ export type Scouting = {
   opponents: {
     week: number;
     team: { id: number; name: string | null; rank: number | null; record: string | null; points_for: number | null };
-    score: { me: number | null; them: number | null; as_of: string | null };
+    score: { me: number | null; them: number | null; as_of: string | null } | null;
     roster: { name: string; nba_team: string | null; positions: string[]; status: string | null; fpts: number; games_left: number; on_il: boolean; missed_streak: number }[];
     injured: Scouting["opponents"][number]["roster"];
     games_left: number;
@@ -395,6 +395,18 @@ export type ScoringProfile = {
   my_rank: Record<string, number>;
   note?: string;
 };
+
+export type ChecklistItem = {
+  key: "settings" | "schedule" | "my_team" | "matchup" | "league_home" | "available" | "taken";
+  saved_at: string | null;
+  status: "ok" | "old" | "missing" | "partial";
+  teams_done?: number;
+  teams_total?: number;
+  missing_teams?: string[];
+  players?: number;
+};
+
+export type Checklist = { league: { id: number; name: string | null } | null; setup: ChecklistItem[]; regular: ChecklistItem[] };
 
 export type PlayoffOdds = {
   week?: number;
@@ -566,6 +578,7 @@ export const api = {
   },
   outlook: () => fetch("/api/outlook").then((r) => json<Outlook>(r)),
   lineup: (day?: string) => fetch(`/api/lineup${day ? `?day=${day}` : ""}`).then((r) => json<LineupDay>(r)),
+  checklist: () => fetch("/api/import/checklist").then((r) => json<Checklist>(r)),
   playoffOdds: () => fetch("/api/playoff-odds").then((r) => json<PlayoffOdds>(r)),
   summary: () => fetch("/api/summary").then((r) => json<DailySummary>(r)),
   summarySettings: () => fetch("/api/summary/settings").then((r) => json<SummarySettings>(r)),

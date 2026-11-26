@@ -165,6 +165,17 @@ class OutlookHistory(Base):
     opp_final: Mapped[float] = mapped_column(Float)
 
 
+class ScheduleWeek(Base):
+    """Who plays whom in each week of the season (from the League page's Schedule tab), stored for both teams."""
+
+    __tablename__ = "schedule_weeks"
+    league_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    week: Mapped[int] = mapped_column(Integer, primary_key=True)
+    team_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    opp_team_id: Mapped[int] = mapped_column(Integer)
+    as_of: Mapped[datetime | None] = mapped_column(DateTime)
+
+
 class MoveLog(Base):
     """A suggested move you opened on Yahoo; later imports show whether it happened."""
 

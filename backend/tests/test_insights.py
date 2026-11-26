@@ -10,7 +10,7 @@ from test_suggest import with_matchup  # noqa: F401  (fixture)
 
 from app import mcp_server
 from app.db import SessionLocal
-from app.db.models import AppSetting, FantasyTeam, GameLog, League, Matchup, MoveLog
+from app.db.models import AppSetting, FantasyTeam, GameLog, League, Matchup, MoveLog, ScheduleWeek
 from app.engine.movelog import performance
 from app.engine.playoffs import playoff_odds
 from app.engine.projections import load_windows, project_players
@@ -59,6 +59,39 @@ def test_playoff_odds_order_and_what_if(season):
     wi = r["what_if"]
     assert wi["win_this_week"] >= wi["lose_this_week"]
     assert any("random" in n for n in r["notes"])
+
+
+def test_playoff_odds_use_the_saved_schedule(season):
+    with SessionLocal() as db:
+        # Weeks 7-8: Mine plays Weak team twice; Strong plays Rival team twice
+        for w in (7, 8):
+            for a, b in ((10, 40), (30, 20)):
+                db.add(ScheduleWeek(league_id=1, week=w, team_id=a, opp_team_id=b, as_of=NOW))
+                db.add(ScheduleWeek(league_id=1, week=w, team_id=b, opp_team_id=a, as_of=NOW))
+        db.commit()
+        r = playoff_odds(db, db.get(League, 1), 10, now_utc=NOW)
+    assert r["notes"] == ["Uses the league's real schedule for every remaining week."]
+    me = next(t for t in r["teams"] if t["is_me"])
+    # Facing the weakest team twice: about 2 more wins than this week's result alone
+    assert me["proj_wins"] >= 3 + 2 - 0.2
+
+
+def test_partial_schedule_counts_unknown_teams(season):
+    with SessionLocal() as db:
+        db.add(ScheduleWeek(league_id=1, week=7, team_id=10, opp_team_id=40, as_of=NOW))
+        db.add(ScheduleWeek(league_id=1, week=7, team_id=40, opp_team_id=10, as_of=NOW))
+        db.commit()
+        r = playoff_odds(db, db.get(League, 1), 10, now_utc=NOW)
+    assert any("6 of 8 remaining team-weeks" in n for n in r["notes"])
+
+
+def test_import_checklist(season):
+    with TestClient(app) as client:
+        c = client.get("/api/import/checklist").json()
+    keys = [i["key"] for i in c["setup"]] + [i["key"] for i in c["regular"]]
+    assert keys == ["settings", "schedule", "my_team", "matchup", "league_home", "available", "taken"]
+    sched = c["setup"][1]
+    assert sched["status"] == "missing" and sched["teams_total"] == 4
 
 
 def test_summary_lists_matchup_moves_and_odds(season):

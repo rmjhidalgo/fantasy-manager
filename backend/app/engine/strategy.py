@@ -14,7 +14,7 @@ from app.engine.freeagents import current_week
 from app.engine.lineup import active_slots
 from app.engine.movelog import my_transactions
 from app.engine.projections import Projection, project_nba_players, project_players, virtual_id
-from app.engine.rosters import team_names, team_rosters
+from app.engine.rosters import scheduled_opponent, team_names, team_rosters
 from app.engine.schedule import Schedule, date_range, today_et
 from app.engine.scoring import YAHOO_TO_LOG, fantasy_points, league_weights
 from app.engine.suggest import LONG_OUT
@@ -165,13 +165,18 @@ def scout_opponent(db: Session, league: League, team_id: int, now_utc: datetime 
     rosters, il = team_rosters(db, league)
     for w in ([week, week + 1] if week else []):
         mu = db.scalar(select(Matchup).where(Matchup.league_id == league.id, Matchup.team_id == team_id, Matchup.week == w))
-        if mu is None:
+        opp = mu.opp_team_id if mu else scheduled_opponent(db, league, team_id, w)
+        if opp is None:
             continue
-        opp = mu.opp_team_id
         ids = list(rosters.get(opp, set()))
         proj = project_players(db, league, ids, today)
         t = db.get(FantasyTeam, (league.id, opp))
-        wstart, wend = (date.fromisoformat(mu.start_date), date.fromisoformat(mu.end_date)) if mu.start_date else (start, end)
+        if mu and mu.start_date:
+            wstart, wend = date.fromisoformat(mu.start_date), date.fromisoformat(mu.end_date)
+        elif w == week:
+            wstart, wend = start, end
+        else:  # next week: Monday-Sunday after this one
+            wstart, wend = end + timedelta(days=1), end + timedelta(days=7)
         sched = Schedule(db, max(today, wstart), wend)
         roster = []
         for pid in ids:
@@ -187,7 +192,8 @@ def scout_opponent(db: Session, league: League, team_id: int, now_utc: datetime 
             "week": w, "team": {"id": opp, "name": names.get(opp), "rank": t.rank if t else None,
                                 "record": f"{t.wins}-{t.losses}-{t.ties}" if t and t.wins is not None else None,
                                 "points_for": t.points_for if t else None},
-            "score": {"me": mu.score, "them": mu.opp_score, "as_of": mu.as_of.isoformat() + "Z" if mu.as_of else None},
+            "score": {"me": mu.score, "them": mu.opp_score, "as_of": mu.as_of.isoformat() + "Z" if mu.as_of else None}
+            if mu else None,
             "roster": roster,
             "injured": [r for r in roster if r["status"] in LONG_OUT | {"D", "Q", "GTD"} or r["missed_streak"] >= 3],
             "games_left": sum(r["games_left"] for r in roster if not r["on_il"] and r["status"] not in LONG_OUT),

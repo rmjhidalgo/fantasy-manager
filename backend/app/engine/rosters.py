@@ -15,6 +15,17 @@ from app.nba.matching import norm_name
 IL_SLOTS = {"IL", "IL+", "NA"}
 
 
+def scheduled_opponent(db: Session, league: League, team_id: int, week: int) -> int | None:
+    """Who a team plays in a week: from a saved Matchup page, else from the season schedule (League page → Schedule tab)."""
+    from app.db.models import Matchup, ScheduleWeek
+
+    mu = db.get(Matchup, (league.id, week, team_id))
+    if mu is not None:
+        return mu.opp_team_id
+    row = db.get(ScheduleWeek, (league.id, week, team_id))
+    return row.opp_team_id if row else None
+
+
 def team_names(db: Session, league: League) -> dict[int, str]:
     return {t.team_id: t.name or f"Team {t.team_id}" for t in db.scalars(select(FantasyTeam).where(FantasyTeam.league_id == league.id))}
 

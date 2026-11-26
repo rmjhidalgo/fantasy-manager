@@ -30,7 +30,8 @@ def test_import_everything_and_overview(fresh_db):
     assert len(ov["standings"]) == 12 and ov["standings"][4]["is_me"]
     assert len(ov["my_roster"]) == 15
     assert ov["matchup"]["week"] == 6 and ov["matchup"]["opp_name"] == "ThorAlmighty"
-    assert ov["matchup"]["my_score"] == 526.2
+    # The schedule fixture is a League page saved ~4 hours later: its fresher score wins
+    assert ov["matchup"]["my_score"] == 757.3
     assert ov["players"]["rostered_known"] >= 177
     assert ov["players"]["free_agents_known"] + ov["players"]["waivers_known"] == 25
     assert ov["settings"]["max_adds_per_week"] == 3

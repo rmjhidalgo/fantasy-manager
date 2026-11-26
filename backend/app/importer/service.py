@@ -28,6 +28,7 @@ from app.db.models import (
     Player,
     PlayerStats,
     RosterSlot,
+    ScheduleWeek,
     Transaction,
 )
 from app.importer import parsers as P
@@ -73,7 +74,10 @@ def import_bytes(
     sha = hashlib.sha256(data).hexdigest()
     with _lock, SessionLocal() as db:
         if db.scalar(select(ImportRecord).where(ImportRecord.sha256 == sha, ImportRecord.status.in_(("imported", "partial")))):
-            return _record(db, sha, filename, source, None, None, ImportResult(filename, "duplicate", summary="Already imported, nothing new."))
+            dup = ImportResult(filename, "duplicate", summary="Already imported, nothing new.")
+            if source == "folder":  # the folder is re-scanned at every start: don't fill the history with these
+                return dup
+            return _record(db, sha, filename, source, None, None, dup)
 
         try:
             page = read_page(data, filename, fallback_saved_at)
@@ -207,8 +211,7 @@ def _store_league_home(db, league: League, kind, html, saved_at, result) -> None
             t.points_for, t.waiver_priority, t.moves, t.as_of = r.points_for, r.waiver_priority, r.moves, saved_at
             db.add(t)
         league.standings_as_of = saved_at
-    else:
-        result.warnings.append("Standings are older than the ones already imported; kept the newer ones.")
+    old_standings = not _newer(saved_at, league.standings_as_of) and league.standings_as_of is not None
     new_tx = 0
     for tx in page.transactions:
         exists = db.scalar(
@@ -236,9 +239,23 @@ def _store_league_home(db, league: League, kind, html, saved_at, result) -> None
                             start_date=same_week.start_date if same_week else None, end_date=same_week.end_date if same_week else None)
             m.opp_team_id, m.score, m.opp_score, m.as_of = opp, s, o, saved_at
             db.add(m)
+    # Schedule tab: one team's whole season (stored for both sides of each matchup)
+    sched_note = ""
+    if page.schedule:
+        for week, opp in page.schedule.weeks.items():
+            for me, other in ((page.schedule.team_id, opp), (opp, page.schedule.team_id)):
+                row = db.get(ScheduleWeek, (league.id, week, me))
+                if row is None:
+                    db.add(ScheduleWeek(league_id=league.id, week=week, team_id=me, opp_team_id=other, as_of=saved_at))
+                elif _newer(saved_at, row.as_of):
+                    row.opp_team_id, row.as_of = other, saved_at
+        name = _team_name(db, league.id, page.schedule.team_id, None)
+        sched_note = f" Schedule of {name}: {len(page.schedule.weeks)} weeks."
     db.flush()
-    result.summary = f"Standings for {len(page.standings)} teams, {new_tx} new transactions" + (
-        f", {len(page.matchups)} matchups of week {page.matchups[0].week}." if page.matchups else ".")
+    # Older standings than stored isn't a problem (e.g. several pages saved a minute apart): just say so.
+    standings = "newer standings already imported" if old_standings else f"standings for {len(page.standings)} teams"
+    result.summary = (sched_note.strip() + " " if sched_note else "") + f"Also: {standings}, {new_tx} new transactions" + (
+        f", this week's {len(page.matchups)} matchups." if page.matchups else ".")
 
 
 def _upsert_player(db: Session, ref: P.PlayerRef, saved_at: datetime, full_name: bool = True) -> None:

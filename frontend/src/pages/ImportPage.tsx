@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ImportHistoryRow, type ImportResult, type NbaStatus, type WatchFolder } from "../api";
+import SaveGuide from "../components/SaveGuide";
 import { formatWhen } from "../time";
 
 const ACCEPT = ".mhtml,.mht,.html,.htm";
@@ -28,8 +29,10 @@ export default function ImportPage({ onImported }: { onImported: () => void }) {
   const [history, setHistory] = useState<ImportHistoryRow[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const [guideVersion, setGuideVersion] = useState(0);
   const loadHistory = useCallback(() => {
     api.imports().then((r) => setHistory(r.imports)).catch(() => {});
+    setGuideVersion((v) => v + 1); // statuses in the save guide update too
   }, []);
   useEffect(loadHistory, [loadHistory]);
 
@@ -51,6 +54,8 @@ export default function ImportPage({ onImported }: { onImported: () => void }) {
 
   return (
     <div className="space-y-6">
+      <SaveGuide version={guideVersion} />
+
       <section
         onDragOver={(e) => {
           e.preventDefault();
@@ -96,8 +101,6 @@ export default function ImportPage({ onImported }: { onImported: () => void }) {
       <WatchFolderCard onImported={onImported} />
 
       <NbaDataCard onChanged={onImported} />
-
-      <HowToSave />
 
       <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -376,48 +379,5 @@ function NbaDataCard({ onChanged }: { onChanged: () => void }) {
         <p className="mt-1 text-sm text-green-700 dark:text-green-400">✓ Every imported Yahoo player is matched to NBA stats.</p>
       )}
     </section>
-  );
-}
-
-function HowToSave() {
-  return (
-    <details className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <summary className="cursor-pointer font-semibold">Which pages to save, and how</summary>
-      <div className="mt-3 space-y-3 text-sm">
-        <p>
-          Open the page on Yahoo Fantasy, press <kbd className="rounded border px-1">Ctrl</kbd>+
-          <kbd className="rounded border px-1">S</kbd>, and save it as <b>Webpage, Single File (.mhtml)</b>. That keeps the
-          exact save time. <i>Webpage, HTML only</i> also works.
-        </p>
-        <table className="w-full">
-          <thead className="text-left text-slate-500">
-            <tr>
-              <th className="py-1 pr-3 font-medium">Page</th>
-              <th className="py-1 pr-3 font-medium">What it gives the app</th>
-              <th className="py-1 font-medium">When</th>
-            </tr>
-          </thead>
-          <tbody className="align-top">
-            {[
-              ["League → Settings", "Scoring, roster spots, limits", "Once, and after rule changes"],
-              ["League home", "Standings, recent transactions", "Weekly"],
-              ["My Team", "Your roster and lineup slots", "After you make moves"],
-              ["Matchup", "This week's score and both rosters", "Daily"],
-              ["Players → Available", "Free agents and waivers, with stats", "Before looking for pickups"],
-              ["Players → Taken (all pages)", "Every rostered player and owner", "Weekly"],
-            ].map(([a, b, c]) => (
-              <tr key={a} className="border-t border-slate-100 dark:border-slate-800">
-                <td className="py-1.5 pr-3 font-medium whitespace-nowrap">{a}</td>
-                <td className="py-1.5 pr-3">{b}</td>
-                <td className="py-1.5 text-slate-500">{c}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="text-slate-500">
-          Older pages never overwrite newer data, so it's safe to import files in any order.
-        </p>
-      </div>
-    </details>
   );
 }

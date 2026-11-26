@@ -85,6 +85,16 @@ def test_league_home_lists_all_matchups_of_the_week():
     assert sorted(t for m in home.matchups for t in (m.team1, m.team2)) == list(range(1, 13))
 
 
+def test_schedule_tab_gives_one_teams_season():
+    page, kind = load("League schedule 2ts.mhtml")
+    assert kind.page_type == "league_home"  # same address as the League page; the Schedule tab is part of it
+    home = P.parse_league_home(page.html, 70793)
+    s = home.schedule
+    assert s is not None and s.team_id == 1  # 2ts was the team selected when saved
+    assert len(s.weeks) == 19 and s.weeks[1] == 3 and s.weeks[6] == 10
+    assert len(home.matchups) == 6  # the schedule table's matchup links aren't mistaken for this week's box
+
+
 def test_team_page_roster():
     page, kind = load("PokemonPinoys")
     assert (kind.page_type, kind.team_id) == ("team", 5)

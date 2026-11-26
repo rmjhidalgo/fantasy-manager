@@ -69,6 +69,52 @@ async def import_files(
     return {"results": results}
 
 
+@router.get("/import/checklist")
+def import_checklist() -> dict:
+    """What to save: one-time setup pages and regular updates, each with when it was last saved."""
+    from app.db.models import ScheduleWeek
+    from app.engine.pool import available_pool
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+
+    def item(key: str, at: datetime | None, stale_hours: float | None, **extra) -> dict:
+        hours = (now - at).total_seconds() / 3600 if at else None
+        status = "missing" if at is None else ("old" if stale_hours is not None and hours > stale_hours else "ok")
+        return {"key": key, "saved_at": _iso(at), "status": status, **extra}
+
+    with SessionLocal() as db:
+        row = db.get(AppSetting, "active_league_id")
+        lg = db.get(League, int(row.value)) if row and row.value else None
+        if lg is None:
+            return {"league": None, "setup": [item("settings", None, None), item("schedule", None, None, teams_done=0, teams_total=0)],
+                    "regular": []}
+        teams = {t.team_id: t.name for t in db.scalars(select(FantasyTeam).where(FantasyTeam.league_id == lg.id))}
+        sched_teams = set(db.scalars(select(ScheduleWeek.team_id).where(ScheduleWeek.league_id == lg.id).distinct()))
+        sched_at = db.scalar(select(func.max(ScheduleWeek.as_of)).where(ScheduleWeek.league_id == lg.id))
+        missing_teams = sorted(n or f"Team {t}" for t, n in teams.items() if t not in sched_teams)
+        schedule = item("schedule", sched_at if sched_teams else None, None,
+                        teams_done=len(sched_teams & set(teams)) if teams else len(sched_teams), teams_total=len(teams),
+                        missing_teams=missing_teams)
+        if sched_teams and missing_teams:
+            schedule["status"] = "partial"
+
+        me = lg.my_team_id
+        roster_at = db.scalar(select(func.max(RosterSlot.as_of)).where(RosterSlot.league_id == lg.id, RosterSlot.team_id == me)) if me else None
+        mu_at = db.scalar(select(func.max(Matchup.as_of)).where(Matchup.league_id == lg.id, Matchup.team_id == me)) if me else None
+        _, info = available_pool(db, lg)
+        return {
+            "league": {"id": lg.id, "name": lg.name},
+            "setup": [item("settings", lg.settings_as_of, None), schedule],
+            "regular": [
+                item("my_team", roster_at, 24),
+                item("matchup", mu_at, 24),
+                item("league_home", lg.standings_as_of, 24),
+                item("available", info.available_as_of, 72),
+                item("taken", info.rostered_as_of, 24 * 7, players=info.rostered_count),
+            ],
+        }
+
+
 @router.post("/imports/reprocess")
 async def reprocess() -> dict:
     """Read all saved pages again (after an app update taught it to read more from them)."""
@@ -80,7 +126,8 @@ async def reprocess() -> dict:
 @router.get("/imports")
 def list_imports(limit: int = 50) -> dict:
     with SessionLocal() as db:
-        rows = db.scalars(select(ImportRecord).order_by(ImportRecord.id.desc()).limit(min(limit, 500))).all()
+        rows = db.scalars(select(ImportRecord).where(ImportRecord.status != "duplicate")
+                          .order_by(ImportRecord.id.desc()).limit(min(limit, 500))).all()
         return {
             "imports": [
                 {

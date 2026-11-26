@@ -5,8 +5,8 @@
 - Later weeks: each team's weekly score is drawn around its projected average (best
   lineups over the remaining regular-season days, injured players assumed back over time),
   with week-to-week noise and a season-long "form" factor per team.
-- Opponents: the real pairing where a Matchup page for that week was saved; otherwise a
-  random opponent each week (the full league schedule isn't on a saved page yet).
+- Opponents: the league's real schedule (League page → Schedule tab, one saved page per
+  team), or a saved Matchup page; teams with no known opponent get a random one.
 - Standings: wins, then points for. The top N (from the settings page) make the playoffs.
 
 Also answers "what if": your playoff chance if you win vs lose this week.
@@ -21,7 +21,7 @@ import numpy as np
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import FantasyTeam, League, Matchup
+from app.db.models import FantasyTeam, League, Matchup, ScheduleWeek
 from app.engine.freeagents import current_week
 from app.engine.lineup import active_slots
 from app.engine.lineup_value import LineupValue
@@ -35,6 +35,7 @@ from app.engine.weeks import playoff_weeks
 SEASONS = 5000
 WEEK_NOISE = 0.10  # extra week-to-week spread, as a share of a team's weekly average
 FORM_SPREAD = 0.04  # season-long strength uncertainty per team
+WHAT_IF_MIN_SHARE = 0.02  # report "if you lose/win this week" only if it happens in at least 2% of seasons
 
 
 @dataclass
@@ -137,27 +138,41 @@ def playoff_odds(db: Session, league: League, team_id: int, now_utc: datetime | 
         means = np.array([strength[t].mean for t in teams])
         sds = np.array([strength[t].sd for t in teams])
         form = 1 + FORM_SPREAD * rng.standard_normal((SEASONS, n_teams))
-        known = {(m.week, m.team_id): m.opp_team_id for m in db.scalars(
-            select(Matchup).where(Matchup.league_id == league.id, Matchup.week.in_(future_weeks)))}
-        random_weeks = 0
+        # Season schedule (League page → Schedule tab), plus any saved Matchup pages for later weeks
+        known = {(s.week, s.team_id): s.opp_team_id for s in db.scalars(
+            select(ScheduleWeek).where(ScheduleWeek.league_id == league.id, ScheduleWeek.week.in_(future_weeks)))}
+        known.update({(m.week, m.team_id): m.opp_team_id for m in db.scalars(
+            select(Matchup).where(Matchup.league_id == league.id, Matchup.week.in_(future_weeks)))})
+        guessed = 0
+        rows = np.arange(SEASONS)[:, None]
         for w in future_weeks:
             scores = np.maximum(means * form + sds * rng.standard_normal((SEASONS, n_teams)), 0)
             opp = np.empty((SEASONS, n_teams), dtype=int)
-            if all((w, t) in known and known[(w, t)] in idx for t in teams):
-                opp[:] = [idx[known[(w, t)]] for t in teams]
-            else:
-                random_weeks += 1
-                perm = np.argsort(rng.random((SEASONS, n_teams)), axis=1)  # random pairing: 1st vs 2nd, 3rd vs 4th, ...
+            # Known pairings (both sides agree); everyone else gets a random opponent among the rest
+            fixed = {t: known[(w, t)] for t in teams
+                     if known.get((w, t)) in idx and known.get((w, known[(w, t)])) == t}
+            for t, o in fixed.items():
+                opp[:, idx[t]] = idx[o]
+            rest = [idx[t] for t in teams if t not in fixed]
+            if rest:
+                guessed += len(rest)
+                r = np.array(rest)
+                perm = r[np.argsort(rng.random((SEASONS, len(rest))), axis=1)]
                 a, b = perm[:, 0::2], perm[:, 1::2]
-                rows = np.arange(SEASONS)[:, None]
-                opp[rows, a] = b
-                opp[rows, b] = a
+                k = min(a.shape[1], b.shape[1])
+                opp[rows, a[:, :k]] = b[:, :k]
+                opp[rows, b[:, :k]] = a[:, :k]
+                if len(rest) % 2:  # odd one out (shouldn't happen): plays himself = no result
+                    opp[rows[:, 0], perm[:, -1]] = perm[:, -1]
             opp_scores = np.take_along_axis(scores, opp, axis=1)
             wins += scores > opp_scores
             points += scores
-        if random_weeks:
-            notes.append(f"Opponents for {random_weeks} of the {len(future_weeks)} remaining weeks are random: the league "
-                         "schedule isn't on a saved page yet.")
+        if guessed:
+            total = n_teams * len(future_weeks)
+            notes.append(f"{guessed} of {total} remaining team-weeks have no known opponent, so a random one is used. Save each "
+                         "team's schedule from the League page's Schedule tab (one-time setup) for exact odds.")
+        else:
+            notes.append("Uses the league's real schedule for every remaining week.")
 
     # ---- standings: wins, then points for
     key = wins * 1e7 + points
@@ -182,9 +197,10 @@ def playoff_odds(db: Session, league: League, team_id: int, now_utc: datetime | 
     if my_week_win is not None:
         i = idx[team_id]
         w, lose = my_week_win, ~my_week_win
+        enough = WHAT_IF_MIN_SHARE * SEASONS  # too few simulated wins (or losses) say nothing reliable
         what_if = {
-            "win_this_week": round(float(made[w, i].mean()), 3) if w.any() else None,
-            "lose_this_week": round(float(made[lose, i].mean()), 3) if lose.any() else None,
+            "win_this_week": round(float(made[w, i].mean()), 3) if w.sum() >= enough else None,
+            "lose_this_week": round(float(made[lose, i].mean()), 3) if lose.sum() >= enough else None,
             "chance_to_win_this_week": round(float(w.mean()), 3),
         }
     return {
