@@ -411,6 +411,7 @@ export type ChecklistItem = {
   teams_total?: number;
   missing_teams?: string[];
   players?: number;
+  urls?: string[]; // the page(s) on Yahoo, to open and save
 };
 
 export type Checklist = { league: { id: number; name: string | null } | null; setup: ChecklistItem[]; regular: ChecklistItem[] };

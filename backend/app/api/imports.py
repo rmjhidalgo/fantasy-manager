@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from app import config
+from app import yahoo_links as links
 from app.db import SessionLocal
 from app.db.models import (
     AppSetting,
@@ -109,18 +110,26 @@ def import_checklist() -> dict:
         roster_at = db.scalar(select(func.max(RosterSlot.as_of)).where(RosterSlot.league_id == lg.id, RosterSlot.team_id == me)) if me else None
         mu_at = db.scalar(select(func.max(Matchup.as_of)).where(Matchup.league_id == lg.id, Matchup.team_id == me)) if me else None
         _, info = available_pool(db, lg)
+        # Yahoo addresses of each page, for the "open the pages to save" button (you still save each one yourself)
+        settings = json.loads(lg.settings_json) if lg.settings_json else {}
+        spots = len(settings.get("roster_positions") or []) or 15
+        taken_pages = max(1, -(-spots * max(len(teams), 1) // 25))
+        season = now.year if now.month >= 8 else now.year - 1  # NBA season 2026-27 is "2026" on Yahoo
+        lid = lg.id
         return {
             "league": {"id": lg.id, "name": lg.name},
-            "setup": [item("settings", lg.settings_as_of, None), schedule],
+            "setup": [item("settings", lg.settings_as_of, None, urls=[links.league_url(lid, "settings")]),
+                      schedule],
             "regular": [
-                item("my_team", roster_at, 24),
-                item("matchup", mu_at, 24),
-                item("league_home", lg.standings_as_of, 24),
+                item("my_team", roster_at, 24, urls=[links.team_url(lid, me)] if me else []),
+                item("matchup", mu_at, 24, urls=[links.matchup_url(lid)]),
+                item("league_home", lg.standings_as_of, 24, urls=[links.league_url(lid)]),
                 item("transactions", db.scalar(select(func.max(ImportRecord.saved_at)).where(
                     ImportRecord.league_id == lg.id, ImportRecord.page_type == "transactions",
-                    ImportRecord.status.in_(("imported", "partial")))), 24),
-                item("available", info.available_as_of, 72),
-                item("taken", info.rostered_as_of, 24 * 7, players=info.rostered_count),
+                    ImportRecord.status.in_(("imported", "partial")))), 24, urls=[links.league_url(lid, "transactions")]),
+                item("available", info.available_as_of, 72, urls=links.players_list_urls(lid, "A", season, 3)),
+                item("taken", info.rostered_as_of, 24 * 7, players=info.rostered_count,
+                     urls=links.players_list_urls(lid, "T", season, taken_pages)),
             ],
         }
 

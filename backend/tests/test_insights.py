@@ -90,6 +90,11 @@ def test_import_checklist(season):
         c = client.get("/api/import/checklist").json()
     keys = [i["key"] for i in c["setup"]] + [i["key"] for i in c["regular"]]
     assert keys == ["settings", "schedule", "my_team", "matchup", "league_home", "transactions", "available", "taken"]
+    urls = {i["key"]: i.get("urls") for i in c["setup"] + c["regular"]}
+    assert urls["matchup"] == ["https://basketball.fantasysports.yahoo.com/nba/1/matchup"]
+    assert urls["transactions"] == ["https://basketball.fantasysports.yahoo.com/nba/1/transactions"]
+    assert len(urls["available"]) == 3 and "status=A" in urls["available"][0] and urls["available"][2].endswith("&count=50")
+    assert "status=T" in urls["taken"][0] and urls["schedule"] is None  # schedule needs a click per team
     sched = c["setup"][1]
     assert sched["status"] == "missing" and sched["teams_total"] == 4
     with SessionLocal() as db:  # Mine's whole season saved: Mine is done; its opponents only partly known

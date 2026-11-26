@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { api, type Checklist, type ChecklistItem } from "../api";
 import { formatWhen } from "../time";
-import { card } from "../ui";
+import { btn, card } from "../ui";
 
 type Step = { key: ChecklistItem["key"]; title: string; what: string; how: ReactNode };
 
@@ -139,6 +139,88 @@ function StatusChip({ item }: { item: ChecklistItem | undefined }) {
   );
 }
 
+/** Opens each page in a new browser tab; returns how many the browser blocked. */
+function openTabs(urls: string[]): number {
+  let blocked = 0;
+  for (const u of urls) {
+    const w = window.open(u, "_blank");
+    if (w) w.opener = null;
+    else blocked++;
+  }
+  return blocked;
+}
+
+const DAILY: ChecklistItem["key"][] = ["my_team", "matchup", "league_home", "transactions"];
+const TITLE = Object.fromEntries([...SETUP, ...REGULAR.flatMap((g) => g.steps)].map((s) => [s.key, s.title]));
+
+function OpenPages({ items }: { items: ChecklistItem[] }) {
+  const [blocked, setBlocked] = useState(0);
+  const withUrls = items.filter((i) => i.urls && i.urls.length > 0);
+  const due = withUrls.filter((i) => i.status !== "ok");
+  const toOpen = due.length > 0 ? due : withUrls.filter((i) => DAILY.includes(i.key));
+  const urls = toOpen.flatMap((i) => i.urls ?? []);
+  if (urls.length === 0) return null;
+  const names = toOpen.map((i) => `${TITLE[i.key] ?? i.key}${(i.urls?.length ?? 0) > 1 ? ` (${i.urls!.length} pages)` : ""}`);
+
+  return (
+    <section className={card}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-semibold">{due.length > 0 ? "Pages to save now" : "Everything is up to date"}</h2>
+          <p className="text-sm text-slate-500">
+            {due.length > 0 ? "Due: " : "To save the daily pages anyway: "}
+            {names.join(", ")}.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setBlocked(openTabs(urls))}
+          className={btn}
+        >
+          Open {urls.length === 1 ? "the page" : `these ${urls.length} pages`} on Yahoo ↗
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">
+        Each page opens in its own browser tab. On each tab press <b>Ctrl</b> + <b>S</b> to save it, then close the tab with{" "}
+        <b>Ctrl</b> + <b>W</b>.
+      </p>
+      {blocked > 0 && (
+        <p className="mt-2 rounded-md bg-amber-50 p-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+          Your browser blocked {blocked} of the tabs. Click the blocked pop-up icon at the right end of the address bar, choose{" "}
+          <b>Always allow pop-ups</b> for this app. Then close the Yahoo tabs that did open and press the button again. (This only
+          lets this app open tabs.)
+        </p>
+      )}
+    </section>
+  );
+}
+
+function OpenLink({ item }: { item: ChecklistItem | undefined }) {
+  const urls = item?.urls ?? [];
+  if (urls.length === 0) return null;
+  const cls = "text-sm text-blue-700 hover:underline dark:text-blue-400";
+  return urls.length === 1 ? (
+    <a href={urls[0]} target="_blank" rel="noopener noreferrer" className={cls}>
+      Open on Yahoo ↗
+    </a>
+  ) : (
+    <button
+      type="button"
+      onClick={() => {
+        const blocked = openTabs(urls);
+        if (blocked > 0)
+          window.alert(
+            `Your browser blocked ${blocked} of the ${urls.length} tabs. Click the blocked pop-up icon at the right end of the address bar, ` +
+              "choose \"Always allow pop-ups\" for this app, close the Yahoo tabs that did open, and click again.",
+          );
+      }}
+      className={cls}
+    >
+      Open all {urls.length} pages on Yahoo ↗
+    </button>
+  );
+}
+
 function StepRow({ step, item, n }: { step: Step; item: ChecklistItem | undefined; n?: number }) {
   return (
     <li className="rounded-md border border-slate-200 p-3 dark:border-slate-700">
@@ -147,7 +229,10 @@ function StepRow({ step, item, n }: { step: Step; item: ChecklistItem | undefine
           {n != null && <span className="mr-1 text-slate-500">{n}.</span>}
           {step.title}
         </div>
-        <StatusChip item={item} />
+        <div className="flex flex-wrap items-center gap-3">
+          <OpenLink item={item} />
+          <StatusChip item={item} />
+        </div>
       </div>
       <div className="text-sm text-slate-500">{step.what}</div>
       <div className="mt-1 text-sm">{step.how}</div>
@@ -175,6 +260,7 @@ export default function SaveGuide({ version }: { version: number }) {
 
   return (
     <div className="space-y-4">
+      {c && <OpenPages items={[...c.setup, ...c.regular]} />}
       <section className={card}>
         <h2 className="mb-2 font-semibold">How to save a page from Yahoo</h2>
         <ol className="ml-5 list-decimal space-y-1 text-sm">
