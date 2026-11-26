@@ -3,13 +3,14 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app import yahoo_links
 from app.api.engine import _active_league, _iso, record_history
 from app.db import SessionLocal
-from app.db.models import FantasyTeam, OutlookHistory
+from app.db.models import FantasyTeam, MoveLog, OutlookHistory
+from app.engine.movelog import log_move, my_transactions, resolve
 from app.engine.adds import adds_used, set_adds_used
 from app.engine.alerts import build_alerts
 from app.engine.freeagents import current_week, rank_free_agents
@@ -112,6 +113,65 @@ def put_untouchable(body: UntouchableBody) -> dict:
         lg = _active_league(db)
         set_untouchables(db, lg.id, _my_team(lg), set(body.player_ids))
         return {"player_ids": sorted(get_untouchables(db, lg.id, _my_team(lg)))}
+
+
+class MoveLogBody(BaseModel):
+    source: str = Field(pattern=r"^(suggested|free agents|streaming)$")
+    add_name: str = Field(min_length=1, max_length=100)
+    add_yahoo_id: int | None = None
+    add_nba_id: int | None = None
+    drop_yahoo_id: int | None = None
+    drop_name: str | None = Field(default=None, max_length=100)
+    gain: float | None = None
+    horizon: str | None = Field(default=None, pattern=r"^[ABCD]$")
+
+
+@router.post("/move-log")
+def add_move_log(body: MoveLogBody) -> dict:
+    with SessionLocal() as db:
+        lg = _active_league(db)
+        row = log_move(db, lg, _my_team(lg), **body.model_dump())
+        return {"id": row.id}
+
+
+@router.get("/move-log")
+def get_move_log() -> dict:
+    with SessionLocal() as db:
+        lg = _active_league(db)
+        team_id = _my_team(lg)
+        resolve(db, lg, team_id)
+        rows = db.scalars(select(MoveLog).where(MoveLog.league_id == lg.id, MoveLog.team_id == team_id)
+                          .order_by(MoveLog.created_at.desc()).limit(100)).all()
+        return {
+            "moves": [
+                {
+                    "id": m.id, "created_at": _iso(m.created_at), "source": m.source, "horizon": m.horizon,
+                    "add_name": m.add_name, "drop_name": m.drop_name, "gain": m.gain, "status": m.status,
+                    "resolved_at": _iso(m.resolved_at), "note": m.note,
+                    "yahoo_url": yahoo_links.player_url(lg.id, m.add_yahoo_id, m.add_name),
+                }
+                for m in rows
+            ],
+            "transactions": my_transactions(db, lg, team_id),
+        }
+
+
+class MoveStatusBody(BaseModel):
+    status: str = Field(pattern=r"^(open|dismissed)$")
+
+
+@router.put("/move-log/{move_id}")
+def set_move_status(move_id: int, body: MoveStatusBody) -> dict:
+    with SessionLocal() as db:
+        lg = _active_league(db)
+        m = db.get(MoveLog, move_id)
+        if m is None or m.league_id != lg.id:
+            raise HTTPException(404, "Move not found")
+        m.status = body.status
+        m.resolved_at = datetime.now(UTC).replace(tzinfo=None) if body.status == "dismissed" else None
+        m.note = None
+        db.commit()
+        return {"ok": True}
 
 
 @router.get("/alerts")

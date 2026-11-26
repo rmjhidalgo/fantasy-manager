@@ -165,6 +165,28 @@ class OutlookHistory(Base):
     opp_final: Mapped[float] = mapped_column(Float)
 
 
+class MoveLog(Base):
+    """A suggested move you opened on Yahoo; later imports show whether it happened."""
+
+    __tablename__ = "move_log"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    league_id: Mapped[int] = mapped_column(Integer, index=True)
+    team_id: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime)  # UTC
+    source: Mapped[str] = mapped_column(String)  # "suggested" | "free agents" | "streaming"
+    horizon: Mapped[str | None] = mapped_column(String)  # A/B/C/D for suggested moves
+    add_yahoo_id: Mapped[int | None] = mapped_column(Integer)
+    add_nba_id: Mapped[int | None] = mapped_column(Integer)
+    add_name: Mapped[str] = mapped_column(String)
+    drop_yahoo_id: Mapped[int | None] = mapped_column(Integer)
+    drop_name: Mapped[str | None] = mapped_column(String)
+    gain: Mapped[float | None] = mapped_column(Float)
+    # open | done | missed (someone else got him) | not done | dismissed
+    status: Mapped[str] = mapped_column(String, default="open")
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime)
+    note: Mapped[str | None] = mapped_column(Text)
+
+
 class GameLog(Base):
     """One finished game for one player."""
 

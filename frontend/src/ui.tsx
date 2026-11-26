@@ -21,12 +21,22 @@ export function StatusTag({ status }: { status: string | null | undefined }) {
   );
 }
 
-export function YahooLink({ href, children = "Open on Yahoo ↗" }: { href: string; children?: ReactNode }) {
+export function YahooLink({
+  href,
+  children = "Open on Yahoo ↗",
+  onOpen,
+}: {
+  href: string;
+  children?: ReactNode;
+  onOpen?: () => void; // e.g. record the move in the move log
+}) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noreferrer"
+      onClick={onOpen}
+      onAuxClick={onOpen}
       className="whitespace-nowrap text-sm text-violet-700 hover:underline dark:text-violet-300"
     >
       {children}

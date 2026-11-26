@@ -6,6 +6,8 @@ import ImportPage from "./pages/ImportPage";
 import LineupPage from "./pages/LineupPage";
 import MatchupPage from "./pages/MatchupPage";
 import OverviewPage, { type NavTarget } from "./pages/OverviewPage";
+import MovesPage from "./pages/MovesPage";
+import SettingsPage from "./pages/SettingsPage";
 import StreamingPage from "./pages/StreamingPage";
 import SuggestPage from "./pages/SuggestPage";
 
@@ -18,7 +20,9 @@ const TABS: [Tab, string][] = [
   ["lineup", "Lineup"],
   ["free-agents", "Free agents"],
   ["streaming", "Streaming"],
+  ["moves", "Move log"],
   ["import", "Import & data"],
+  ["settings", "Settings"],
 ];
 
 const ALERTS_EVERY_MS = 5 * 60 * 1000;
@@ -34,6 +38,15 @@ export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [backendDown, setBackendDown] = useState(false);
   const [version, setVersion] = useState(0); // bumps when data changes, so pages reload
+  const [askClaude, setAskClaude] = useState(false);
+
+  const loadAssistant = useCallback(() => {
+    api
+      .assistant()
+      .then((s) => setAskClaude(s.enabled && s.installed))
+      .catch(() => setAskClaude(false));
+  }, []);
+  useEffect(loadAssistant, [loadAssistant]);
 
   const loadAlerts = useCallback(() => {
     api
@@ -80,20 +93,31 @@ export default function App() {
       <header className="border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <h1 className="text-lg font-semibold">🏀 Fantasy Manager</h1>
-          {leagues.length > 0 && (
-            <select
-              value={active?.id ?? ""}
-              onChange={(e) => api.setActiveLeague(Number(e.target.value)).then(refresh)}
-              className="rounded-md border border-slate-300 bg-transparent px-2 py-1 text-sm dark:border-slate-700"
-              title="Switch team"
-            >
-              {leagues.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.my_team_name ?? "My team"} · {l.name ?? `League ${l.id}`}
-                </option>
-              ))}
-            </select>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            {askClaude && (
+              <a
+                href="claude://"
+                title="Opens Claude Desktop, which can read this app's numbers (read-only)"
+                className="rounded-md border border-violet-300 px-2 py-1 text-sm text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950"
+              >
+                ✦ Ask Claude
+              </a>
+            )}
+            {leagues.length > 0 && (
+              <select
+                value={active?.id ?? ""}
+                onChange={(e) => api.setActiveLeague(Number(e.target.value)).then(refresh)}
+                className="rounded-md border border-slate-300 bg-transparent px-2 py-1 text-sm dark:border-slate-700"
+                title="Switch team"
+              >
+                {leagues.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.my_team_name ?? "My team"} · {l.name ?? `League ${l.id}`}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
         <nav className="mx-auto mt-3 flex max-w-6xl flex-wrap gap-1">
           {TABS.map(([key, label]) => (
@@ -127,7 +151,9 @@ export default function App() {
         {tab === "lineup" && <LineupPage outlook={outlook} />}
         {tab === "free-agents" && <FreeAgentsPage key={version} />}
         {tab === "streaming" && <StreamingPage key={version} />}
+        {tab === "moves" && <MovesPage key={version} />}
         {tab === "import" && <ImportPage onImported={refresh} />}
+        {tab === "settings" && <SettingsPage onChange={loadAssistant} />}
       </main>
 
       <footer className="mx-auto max-w-6xl px-4 pb-6 text-xs text-slate-400">

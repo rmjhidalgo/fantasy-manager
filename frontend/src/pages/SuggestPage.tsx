@@ -181,7 +181,25 @@ export default function SuggestPage({ outlook }: { outlook: Outlook | null }) {
                           </div>
                         )}
                         <div className="mt-1">
-                          <YahooLink href={m.yahoo_url}>{m.add.yahoo_id ? "Add on Yahoo ↗" : "Find on Yahoo ↗"}</YahooLink>
+                          <YahooLink
+                            href={m.yahoo_url}
+                            onOpen={() =>
+                              api
+                                .logMove({
+                                  source: "suggested",
+                                  horizon: data.horizon,
+                                  add_name: m.add.name,
+                                  add_yahoo_id: m.add.yahoo_id,
+                                  add_nba_id: m.add.id < 0 ? -m.add.id : null,
+                                  drop_yahoo_id: m.drop && m.drop.id > 0 ? m.drop.id : null,
+                                  drop_name: m.drop?.name ?? null,
+                                  gain: m.gain,
+                                })
+                                .catch(() => {})
+                            }
+                          >
+                            {m.add.yahoo_id ? "Add on Yahoo ↗" : "Find on Yahoo ↗"}
+                          </YahooLink>
                         </div>
                       </div>
                     </div>

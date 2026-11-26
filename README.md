@@ -23,7 +23,10 @@ A free, non-commercial helper for **Yahoo Fantasy Basketball** (head-to-head poi
   - league settings, standings, matchups and transactions
   - team rosters
   - player positions, status, and free agent/waiver status
-- Public NBA schedule, game stats and injury report.
+- Public NBA schedule and box scores. Injury status comes from the tags on your saved Yahoo pages.
+
+## Optional: ask Claude about your team
+If you use Claude Desktop, the app's **Settings** tab can add a small local MCP server to it. Claude then reads the app's numbers (roster, matchup, suggested moves, free agents…) **read-only**, using your own Claude plan. The app itself never calls Claude, stores no Claude login, and works fully without it.
 
 ## Not affiliated
 This project is not affiliated with or endorsed by Yahoo or the NBA.

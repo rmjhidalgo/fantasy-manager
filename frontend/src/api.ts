@@ -258,6 +258,44 @@ export type Streaming = {
   }[];
 };
 
+export type MoveLogInput = {
+  source: "suggested" | "free agents" | "streaming";
+  add_name: string;
+  add_yahoo_id?: number | null;
+  add_nba_id?: number | null;
+  drop_yahoo_id?: number | null;
+  drop_name?: string | null;
+  gain?: number | null;
+  horizon?: Horizon | null;
+};
+
+export type MoveLogData = {
+  moves: {
+    id: number;
+    created_at: string;
+    source: string;
+    horizon: string | null;
+    add_name: string;
+    drop_name: string | null;
+    gain: number | null;
+    status: "open" | "done" | "missed" | "not done" | "dismissed";
+    resolved_at: string | null;
+    note: string | null;
+    yahoo_url: string;
+  }[];
+  transactions: { when: string; description: string; moves: { name: string; action: "add" | "drop" }[] }[];
+};
+
+export type AssistantStatus = {
+  enabled: boolean;
+  last_used: string | null;
+  config_path: string | null;
+  installed: boolean;
+  server_entry: Record<string, unknown>;
+  claude_code_command: string;
+  result?: { path: string; backup?: string; removed?: boolean };
+};
+
 export type Horizon = "A" | "B" | "C" | "D";
 
 export type Suggestions = {
@@ -390,6 +428,29 @@ export const api = {
   },
   outlook: () => fetch("/api/outlook").then((r) => json<Outlook>(r)),
   lineup: (day?: string) => fetch(`/api/lineup${day ? `?day=${day}` : ""}`).then((r) => json<LineupDay>(r)),
+  logMove: (m: MoveLogInput) =>
+    fetch("/api/move-log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(m),
+      keepalive: true, // the click also opens Yahoo in a new tab
+    }).then((r) => json<{ id: number }>(r)),
+  moveLog: () => fetch("/api/move-log").then((r) => json<MoveLogData>(r)),
+  setMoveStatus: (id: number, status: "open" | "dismissed") =>
+    fetch(`/api/move-log/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    }).then((r) => json<{ ok: boolean }>(r)),
+  assistant: () => fetch("/api/assistant").then((r) => json<AssistantStatus>(r)),
+  setAssistant: (enabled: boolean) =>
+    fetch("/api/assistant", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    }).then((r) => json<AssistantStatus>(r)),
+  installAssistant: () => fetch("/api/assistant/install", { method: "POST" }).then((r) => json<AssistantStatus>(r)),
+  uninstallAssistant: () => fetch("/api/assistant/uninstall", { method: "POST" }).then((r) => json<AssistantStatus>(r)),
   suggestions: (horizon: Horizon) => fetch(`/api/suggestions?horizon=${horizon}`).then((r) => json<Suggestions>(r)),
   untouchables: () => fetch("/api/untouchables").then((r) => json<{ player_ids: number[] }>(r)),
   setUntouchables: (player_ids: number[]) =>

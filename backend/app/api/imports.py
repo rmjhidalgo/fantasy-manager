@@ -223,7 +223,7 @@ def overview() -> dict:
 
         return {
             "league": {"id": lid, "name": lg.name, "my_team_id": me, "my_team_name": teams[me].name if me in teams else None},
-            "settings": settings and {k: settings[k] for k in ("scoring", "roster_positions", "max_adds_per_week", "playoff_weeks", "trade_end_date")},
+            "settings": settings and {k: settings.get(k) for k in ("scoring", "roster_positions", "max_adds_per_week", "playoff_weeks", "trade_end_date")},
             "freshness": {
                 "settings": _iso(lg.settings_as_of),
                 "standings": _iso(lg.standings_as_of),

@@ -210,7 +210,24 @@ export default function FreeAgentsPage() {
                     )}
                   </td>
                   <td className="py-1.5">
-                    <YahooLink href={p.yahoo_url}>{p.yahoo_id ? "Add on Yahoo ↗" : "Find on Yahoo ↗"}</YahooLink>
+                    <YahooLink
+                      href={p.yahoo_url}
+                      onOpen={() =>
+                        api
+                          .logMove({
+                            source: "free agents",
+                            add_name: p.name,
+                            add_yahoo_id: p.yahoo_id,
+                            add_nba_id: p.id < 0 ? -p.id : null,
+                            drop_yahoo_id: p.drop && p.drop > 0 ? p.drop : null,
+                            drop_name: p.drop_name,
+                            gain: p.gain,
+                          })
+                          .catch(() => {})
+                      }
+                    >
+                      {p.yahoo_id ? "Add on Yahoo ↗" : "Find on Yahoo ↗"}
+                    </YahooLink>
                   </td>
                 </tr>
               ))}

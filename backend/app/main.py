@@ -3,9 +3,11 @@
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
-from app import __version__, config
+from app import __version__, assistant, config
+from app.api.assistant import router as assistant_router
 from app.api.engine import router as engine_router
 from app.api.imports import router as imports_router
 from app.api.imports import start_saved_watcher
@@ -30,7 +32,22 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Fantasy Manager", version=__version__, lifespan=lifespan)
+
+
+@app.middleware("http")
+async def assistant_gate(request: Request, call_next):
+    """Requests from the MCP server (Claude): refused while the assistant is switched off; otherwise noted."""
+    if request.headers.get(assistant.CLIENT_HEADER) == "mcp":
+        if not assistant.enabled():
+            return JSONResponse({"detail": "The AI assistant is switched off in Fantasy Manager (Settings tab)."}, status_code=403)
+        if request.method != "GET":
+            return JSONResponse({"detail": "Claude has read-only access to Fantasy Manager."}, status_code=403)
+        assistant.touch()
+    return await call_next(request)
+
+
 app.include_router(imports_router)
+app.include_router(assistant_router)
 app.include_router(engine_router)
 app.include_router(moves_router)
 
