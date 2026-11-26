@@ -205,6 +205,7 @@ def test_sync_keeps_finished_games_only_and_matches_players(fresh_db, monkeypatc
     monkeypatch.setattr(client, "fetch_game_logs", lambda season: logs)
     monkeypatch.setattr(client, "fetch_players", lambda season: players)
     monkeypatch.setattr(client, "fetch_player_index", lambda season: [{"PERSON_ID": 1, "POSITION": "G-F"}])
+    monkeypatch.setattr(client, "fetch_injuries", lambda: [])
     with SessionLocal() as db:
         db.add(Player(id=6014, name="Luka Doncic", nba_team="AAA", positions="PG,SG"))
         db.commit()
@@ -230,6 +231,7 @@ def test_sync_works_without_positions(fresh_db, monkeypatch):
     monkeypatch.setattr(client, "fetch_game_logs", lambda season: [])
     monkeypatch.setattr(client, "fetch_players", lambda season: [{"PERSON_ID": 1, "DISPLAY_FIRST_LAST": "A B", "TEAM_ABBREVIATION": "AAA"}])
     monkeypatch.setattr(client, "fetch_player_index", fail)
+    monkeypatch.setattr(client, "fetch_injuries", fail)
     sync.refresh()
     with SessionLocal() as db:
         assert db.get(NbaPlayer, 1).position is None

@@ -120,6 +120,7 @@ export type Outlook = {
     source: "nba" | "yahoo" | "none";
     recent_mpg: number | null;
     season_mpg: number | null;
+    injury?: string | null;
     games_left: number | null;
   }[];
 };
@@ -176,6 +177,7 @@ export type FreeAgent = {
   positions_estimated: boolean;
   status: string | null;
   missed_streak: number;
+  injury?: string | null;
   kind: "FA" | "W" | "?";
   source: "page" | "nba";
   waiver_until: string | null;
@@ -316,6 +318,8 @@ export type TradePlayer = {
   fpts: number;
   games: number;
   value: number;
+  injury?: string | null;
+  return_date?: string | null;
 };
 
 export type TradeSide = { id: number; name: string | null; gain: number; before: number; after: number; drops: TradePlayer[] };
@@ -371,6 +375,7 @@ export type ComparedPlayer = {
   floor: number | null;
   ceiling: number | null;
   missed_streak: number;
+  injury?: string | null;
   last_games: { date: string; fp: number; min: number | null }[];
   games: Record<string, number>;
   pct_rostered: number | null;
@@ -382,7 +387,7 @@ export type Scouting = {
     week: number;
     team: { id: number; name: string | null; rank: number | null; record: string | null; points_for: number | null };
     score: { me: number | null; them: number | null; as_of: string | null } | null;
-    roster: { name: string; nba_team: string | null; positions: string[]; status: string | null; fpts: number; games_left: number; on_il: boolean; missed_streak: number }[];
+    roster: { name: string; nba_team: string | null; positions: string[]; status: string | null; fpts: number; games_left: number; on_il: boolean; missed_streak: number; injury?: string | null }[];
     injured: Scouting["opponents"][number]["roster"];
     games_left: number;
     adds_this_week: number | null;
@@ -532,6 +537,7 @@ export type MatchupDetail = {
 };
 
 export type NbaStatus = {
+  injuries?: { count: number; refreshed_at: string | null };
   refreshed_at: string | null;
   season: string | null;
   games: number;

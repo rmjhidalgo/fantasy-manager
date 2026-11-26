@@ -31,7 +31,7 @@ from app.engine.adds import adds_used
 from app.engine.freeagents import TeamContext, build_context, current_week
 from app.engine.lineup import Candidate, active_slots, optimize_day
 from app.engine.lineup_value import LineupValue
-from app.engine.projections import Projection, project_players
+from app.engine.projections import Projection, injury_text, project_players
 from app.engine.rosters import scheduled_opponent, team_rosters
 from app.engine.schedule import Schedule, date_range, today_et
 from app.engine.simulator import RosterMove, matchup_outlook
@@ -94,7 +94,10 @@ def adjust_for_horizon(proj: dict[int, Projection], key: str) -> None:
         return
     for pid, p in list(proj.items()):
         prob = p.play_prob
-        if p.status in ("OFS",):
+        if p.return_date is not None:
+            # Known expected return (ESPN): the day-by-day chance already handles it; only the form blend below applies
+            pass
+        elif p.status in ("OFS",):
             prob = 0.0
         elif key == "D":
             prob = 0.9
@@ -125,7 +128,9 @@ def _normal_win(my_mean: float, my_var: float, opp_mean: float, opp_var: float) 
 
 
 def _game_days(lv: LineupValue, pid: int, start: int) -> list[int]:
-    return [i for i in range(start, len(lv.days)) if lv.has_open_game(pid, i)]
+    """Days he has a game he could play (not while out injured)."""
+    vals = lv.values(pid)
+    return [i for i in range(start, len(lv.days)) if lv.has_open_game(pid, i) and vals[i] > 0]
 
 
 def _empty_slot_days(ctx: TeamContext, timeline: list[set[int]], pid: int, drop: int | None, start: int) -> int:
@@ -167,10 +172,18 @@ def _reasons(ctx: TeamContext, key: str, m: Move, timeline_before: list[set[int]
             out.append(f"On waivers until {when}: put in a claim.")
     elif pool_kind == "?":
         out.append("Not on a saved page: check on Yahoo that he's a free agent (positions are estimated).")
-    if p.status:
+    inj = injury_text(p, ctx.today)
+    if inj:
+        out.append(f"{inj}: counted only from then (ESPN's estimate).")
+    elif p.status:
         out.append(f"Injury tag {p.status}: counted at {p.play_prob:.0%} to play.")
-    if m.drop is not None and ctx.proj[m.drop].status in LONG_OUT and key in ("A", "B"):
-        out.append(f"{ctx.proj[m.drop].name} is tagged {ctx.proj[m.drop].status}.")
+    if m.drop is not None:
+        d = ctx.proj[m.drop]
+        d_inj = injury_text(d, ctx.today)
+        if d_inj:
+            out.append(f"{d.name}: {d_inj[0].lower() + d_inj[1:]}.")
+        elif d.status in LONG_OUT and key in ("A", "B"):
+            out.append(f"{d.name} is tagged {d.status}.")
     return out
 
 

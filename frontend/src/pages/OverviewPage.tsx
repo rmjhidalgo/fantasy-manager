@@ -3,7 +3,7 @@ import AlertsCard from "../components/AlertsCard";
 import SummaryCard from "../components/SummaryCard";
 import Welcome from "../components/Welcome";
 import { formatWhen, hoursOld } from "../time";
-import { card, dayLabel } from "../ui";
+import { card, dayLabel, InjuryNote } from "../ui";
 
 export type NavTarget = "suggest" | "matchup" | "lineup" | "streaming" | "import" | "free-agents" | "moves" | "settings" | "strategy";
 
@@ -112,6 +112,7 @@ export default function OverviewPage({
                             </span>
                           )}
                         </div>
+                        <InjuryNote text={pr?.injury} />
                       </td>
                       <td className="py-1 pr-2 text-right font-medium tabular-nums">{pr?.fpts?.toFixed(1) ?? "–"}</td>
                       <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{r.fpts?.toFixed(1) ?? "–"}</td>

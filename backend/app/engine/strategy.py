@@ -13,7 +13,7 @@ from app.engine.adds import counted_adds
 from app.engine.freeagents import current_week
 from app.engine.lineup import active_slots
 from app.engine.movelog import my_transactions
-from app.engine.projections import Projection, project_nba_players, project_players, virtual_id
+from app.engine.projections import Projection, injury_text, project_nba_players, project_players, virtual_id
 from app.engine.rosters import scheduled_opponent, team_names, team_rosters
 from app.engine.schedule import Schedule, date_range, today_et
 from app.engine.scoring import YAHOO_TO_LOG, fantasy_points, league_weights
@@ -145,7 +145,7 @@ def compare_players(db: Session, league: League, team_id: int, ids: list[int], n
             "fpts": p.fpts, "play_prob": p.play_prob, "window_fp": p.window_fp, "recent_mpg": p.recent_mpg, "season_mpg": p.season_mpg,
             "games_played": len(fp), "sd": round(statistics.pstdev(fp), 1) if len(fp) >= 2 else None,
             "floor": round(q[0], 1) if q else None, "ceiling": round(q[2], 1) if q else None,
-            "missed_streak": p.missed_streak,
+            "missed_streak": p.missed_streak, "injury": injury_text(p, today),
             "last_games": [{"date": g.date_et, "fp": v, "min": g.min} for g, v in list(zip(logs, fp, strict=True))[-10:]],
             "games": games, "pct_rostered": ys.pct_rostered if ys else None,
         })
@@ -185,7 +185,7 @@ def scout_opponent(db: Session, league: League, team_id: int, now_utc: datetime 
                 continue
             games = sum(1 for d in date_range(max(today, wstart), wend) if sched.game(p.nba_team, d))
             roster.append({"name": p.name, "nba_team": p.nba_team, "positions": p.positions, "status": p.status, "fpts": p.fpts,
-                           "games_left": games, "on_il": pid in il.get(opp, set()), "missed_streak": p.missed_streak})
+                           "games_left": games, "on_il": pid in il.get(opp, set()), "missed_streak": p.missed_streak, "injury": injury_text(p, today)})
         roster.sort(key=lambda r: -r["fpts"])
         team_tx = my_transactions(db, league, opp)  # works for any team
         out["opponents"].append({
@@ -195,7 +195,7 @@ def scout_opponent(db: Session, league: League, team_id: int, now_utc: datetime 
             "score": {"me": mu.score, "them": mu.opp_score, "as_of": mu.as_of.isoformat() + "Z" if mu.as_of else None}
             if mu else None,
             "roster": roster,
-            "injured": [r for r in roster if r["status"] in LONG_OUT | {"D", "Q", "GTD"} or r["missed_streak"] >= 3],
+            "injured": [r for r in roster if r["status"] in LONG_OUT | {"D", "Q", "GTD"} or r["missed_streak"] >= 3 or r["injury"]],
             "games_left": sum(r["games_left"] for r in roster if not r["on_il"] and r["status"] not in LONG_OUT),
             "adds_this_week": sum(c["adds"] for c in counted_adds(db, league, opp, start, end)) if w == week else None,
             "transactions": team_tx,

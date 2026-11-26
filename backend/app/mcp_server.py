@@ -25,10 +25,11 @@ READ_ONLY = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempot
 INSTRUCTIONS = """Fantasy Manager is the user's own app for their Yahoo Fantasy Basketball league (head-to-head points).
 It works from Yahoo pages the user saves (Ctrl+S) plus NBA box scores and schedules, and projects fantasy points (FP).
 - All tools are read-only. The user makes every move on Yahoo; suggest, don't claim to act.
-- Numbers are projections: mention when data is old (see get_data_freshness), and that injury news comes from saved Yahoo tags.
+- Numbers are projections: mention when data is old (see get_data_freshness). Injuries: expected return dates come from ESPN's
+  injury list (refreshed every few hours), else from the Yahoo tags on saved pages. Injured players count only from their return.
 - "Gain" = extra points that would end up in the user's daily lineups, worked out with a lineup optimizer.
 - Players marked "not on a saved page" may be on waivers and have estimated positions.
-- Dates are US Eastern (NBA game days). Yahoo links are included so the user can open the right page."""
+- Game days are US Eastern dates (Yahoo and the NBA use them); the user may live in another time zone. Yahoo links are included."""
 
 mcp = MCPServer("Fantasy Manager", instructions=INSTRUCTIONS)
 
@@ -107,7 +108,7 @@ def get_roster() -> dict:
         rows.append({
             "name": r["name"], "slot": r["slot"], "nba_team": r["nba_team"], "positions": r["positions"], "status": r["status"],
             "proj_fp_per_game": _r(p.get("fpts")), "season_fp_per_game": _r(r.get("fpts")), "games_left_this_week": p.get("games_left"),
-            "chance_to_play": p.get("play_prob"), "minutes_last_14_days": p.get("recent_mpg"), "minutes_season": p.get("season_mpg"),
+            "chance_to_play": p.get("play_prob"), "injury": p.get("injury"), "minutes_last_14_days": p.get("recent_mpg"), "minutes_season": p.get("season_mpg"),
         })
     return {"players": rows}
 
@@ -197,7 +198,7 @@ def search_free_agents(window: Literal["week", "7", "14"] = "week", position: Li
             continue
         out.append({
             "name": p["name"], "nba_team": p["nba_team"], "positions": p["positions"], "positions_estimated": p["positions_estimated"],
-            "status": p["status"], "availability": p["kind"], "waiver_until": p["waiver_until"], "games": p["games"],
+            "status": p["status"], "injury": p.get("injury"), "availability": p["kind"], "waiver_until": p["waiver_until"], "games": p["games"],
             "proj_fp_per_game": p["fpts"], "fp_last_14_days": p["window_fp"].get("L14"), "fp_season": p["window_fp"].get("S"),
             "minutes_last_14_days": p["recent_mpg"], "minutes_season": p["season_mpg"], "pct_rostered": p["pct_rostered"],
             "gain_points": p["gain"], "drop": p["drop_name"], "yahoo_url": p["yahoo_url"],
@@ -266,7 +267,7 @@ def analyze_trade(give: list[str], get: list[str], horizon: Literal["A", "B", "C
     return {
         "horizon": f"{d['horizon']} ({d['label']})", "takes_effect": d["effective"], "trade_deadline": d["deadline"],
         "verdict": d["verdict"], "me": side(d["my_team"]), "them": side(d["their_team"]),
-        "players": [{"side": s, "name": p["name"], "status": p["status"], "proj_fp_per_game": p["fpts"], "games_in_horizon": p["games"]}
+        "players": [{"side": s, "name": p["name"], "status": p["status"], "injury": p.get("injury"), "proj_fp_per_game": p["fpts"], "games_in_horizon": p["games"]}
                     for s, ps in (("give", d["give"]), ("get", d["get"])) for p in ps],
         "notes": d["notes"],
     }
@@ -280,7 +281,7 @@ def find_trades(horizon: Literal["A", "B", "C", "D"] = "C", limit: int = 8) -> d
     return {
         "horizon": f"{d['horizon']} ({d['label']})", "takes_effect": d["effective"], "trade_deadline": d["deadline"],
         "ideas": [{"with": t["team"]["name"], "give": t["give"]["name"], "get": t["get"]["name"], "my_gain": t["my_gain"],
-                   "their_gain": t["their_gain"], "get_status": t["get"]["status"]} for t in d["trades"]] or "No trade helps both sides.",
+                   "their_gain": t["their_gain"], "get_status": t["get"]["status"], "get_injury": t["get"].get("injury")} for t in d["trades"]] or "No trade helps both sides.",
         "notes": d["notes"],
     }
 
@@ -314,7 +315,7 @@ def compare_players(names: list[str]) -> dict:
         ids.append(hits[0]["id"])
     d = _get("/api/players/compare", ids=ids)
     return {"players": [{
-        "name": p["name"], "nba_team": p["nba_team"], "positions": p["positions"], "status": p["status"], "owner": p["owner"],
+        "name": p["name"], "nba_team": p["nba_team"], "positions": p["positions"], "status": p["status"], "injury": p.get("injury"), "owner": p["owner"],
         "proj_fp_per_game": p["fpts"], "fp_per_game": p["window_fp"], "minutes_last_14_days": p["recent_mpg"],
         "minutes_season": p["season_mpg"], "games_played": p["games_played"], "spread": p["sd"], "floor": p["floor"],
         "ceiling": p["ceiling"], "last_10_fp": [g["fp"] for g in p["last_games"]], "games_upcoming": p["games"],
@@ -332,7 +333,7 @@ def scout_opponent() -> dict:
         "week": o["week"], "team": o["team"], "score": o["score"], "games_left": o["games_left"],
         "adds_this_week": o["adds_this_week"],
         "injured_or_missing": [f"{r['name']} ({r['status'] or 'missed ' + str(r['missed_streak']) + ' games'})" for r in o["injured"]],
-        "roster": [{"name": r["name"], "proj_fp": r["fpts"], "games_left": r["games_left"], "status": r["status"]} for r in o["roster"]],
+        "roster": [{"name": r["name"], "proj_fp": r["fpts"], "games_left": r["games_left"], "status": r["status"], "injury": r.get("injury")} for r in o["roster"]],
         "recent_transactions": [t["description"] for t in o["transactions"]],
     } for o in d["opponents"]]}
 

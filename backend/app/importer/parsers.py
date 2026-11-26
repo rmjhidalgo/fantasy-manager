@@ -395,6 +395,8 @@ class MatchupPage:
     right: MatchupSide
 
 
+_SLOT_LABELS = {"PG", "SG", "G", "SF", "PF", "F", "C", "Util", "BN", "IL", "IL+", "NA", "--"}
+
 _MATCHUP_TEAM_POS = re.compile(r"^([A-Z]{2,4})\s+-\s+([A-Z,]+)$")
 
 
@@ -425,11 +427,19 @@ def parse_matchup(html: str, league_id: int) -> MatchupPage:
         set(re.findall(r"date=(\d{4}-\d{2}-\d{2})", " ".join(a["href"] for a in soup.find_all("a", href=True) if "/matchup" in a["href"])))
     )
 
-    # Header: the two big team links, and the two scores between them.
-    team_links = [
-        a for a in soup.find_all("a", href=re.compile(rf"/nba/{league_id}/\d+/?$"))
-        if "Fz(26px)" in (a.get("class") or [])
-    ]
+    # Header: the two team links, and the two scores between them. The page has two layouts
+    # (the "Live" day tab and the "Totals" tab), which style these links differently.
+    team_links: list[Tag] = []
+    for style in ("Fz(26px)", "F-link"):
+        seen: set[int | None] = set()
+        team_links = []
+        for a in soup.find_all("a", href=re.compile(rf"/nba/{league_id}/\d+/?$")):
+            tid = _team_id_from_href(a["href"], league_id)
+            if style in (a.get("class") or []) and _text(a) and tid not in seen:
+                seen.add(tid)
+                team_links.append(a)
+        if len(team_links) >= 2:
+            break
     if len(team_links) < 2:
         raise ParseError("Matchup teams not found")
     left_a, right_a = team_links[0], team_links[1]
@@ -440,7 +450,9 @@ def parse_matchup(html: str, league_id: int) -> MatchupPage:
         float(s) for s in re.findall(r"(?<![\d.])(\d+\.\d{2})(?![\d.])", container.get_text(" ", strip=True))
     ] if container else []
 
-    # Rosters: rows of the big table with a slot in the middle column.
+    # Rosters: one row per lineup slot, my player on the left and the opponent's on the right.
+    # Live tab: one slot column in the middle. Totals tab: a slot column before each side's player.
+    # So each player takes the nearest slot label before him in the row (else the next one after).
     left_roster: list[RosterEntry] = []
     right_roster: list[RosterEntry] = []
     table = None
@@ -453,17 +465,15 @@ def parse_matchup(html: str, league_id: int) -> MatchupPage:
         raise ParseError("Matchup roster table not found")
     for tr in table.find_all("tr"):
         tds = tr.find_all("td", recursive=False)
-        if len(tds) < 3:
-            continue
-        mid = len(tds) // 2
-        slot = _text(tds[mid])
-        if not slot or slot == "TOTAL":
-            continue
-        lp, rp = _matchup_player(tds[0]), _matchup_player(tds[mid + 1])
-        if lp:
-            left_roster.append(RosterEntry(slot, lp))
-        if rp:
-            right_roster.append(RosterEntry(slot, rp))
+        slot_at = {i: _text(td) for i, td in enumerate(tds) if _text(td) in _SLOT_LABELS}
+        players = [(i, p) for i, td in enumerate(tds) if (p := _matchup_player(td))]
+        for k, (i, p) in enumerate(players[:2]):
+            before = [j for j in slot_at if j < i]
+            after = [j for j in slot_at if j > i]
+            slot = slot_at[max(before)] if before else (slot_at[min(after)] if after else None)
+            if slot is None or slot == "--":  # "--": dropped earlier in the week, no longer on the roster
+                continue
+            (left_roster if k == 0 else right_roster).append(RosterEntry(slot, p))
 
     def side(a: Tag, score: float | None, roster: list[RosterEntry]) -> MatchupSide:
         return MatchupSide(_team_id_from_href(a["href"], league_id), _text(a), score, roster)

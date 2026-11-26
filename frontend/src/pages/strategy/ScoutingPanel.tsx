@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Scouting } from "../../api";
-import { card, errText, Loading, Notice, StatusTag } from "../../ui";
+import { card, errText, InjuryNote, Loading, Notice, StatusTag } from "../../ui";
 
 export default function ScoutingPanel() {
   const [d, setD] = useState<Scouting | null>(null);
@@ -52,6 +52,7 @@ export default function ScoutingPanel() {
                       {r.nba_team} · {r.positions.join(",")}
                       {r.on_il && " · IL"}
                     </span>
+                    <InjuryNote text={r.injury} />
                   </td>
                   <td className="py-1 pr-2 text-right tabular-nums">{r.fpts.toFixed(1)}</td>
                   <td className="py-1 text-right tabular-nums">{r.games_left}</td>

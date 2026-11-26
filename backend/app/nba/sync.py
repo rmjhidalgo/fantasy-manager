@@ -7,14 +7,15 @@ from datetime import UTC, datetime
 from sqlalchemy import delete
 
 from app.db import SessionLocal
-from app.db.models import AppSetting, GameLog, NbaGame, NbaPlayer
+from app.db.models import AppSetting, GameLog, NbaGame, NbaInjury, NbaPlayer
 from app.nba import client
 
 log = logging.getLogger(__name__)
 _lock = threading.Lock()
 
 # Yahoo and NBA mostly share team codes; these cover the usual alternatives.
-TEAM_ALIASES = {"PHO": "PHX", "GS": "GSW", "NY": "NYK", "SA": "SAS", "NO": "NOP", "UTAH": "UTA", "BRK": "BKN", "CHO": "CHA", "WSH": "WAS"}
+TEAM_ALIASES = {"PHO": "PHX", "GS": "GSW", "NY": "NYK", "SA": "SAS", "NO": "NOP", "UTAH": "UTA", "UTH": "UTA", "BRK": "BKN",
+                "CHO": "CHA", "WSH": "WAS"}
 
 
 def norm_team(code: str | None) -> str | None:
@@ -134,9 +135,37 @@ def refresh() -> dict:
         from app.nba.matching import match_all
 
         unmatched = match_all()
-        result = {"season": season, "games": len(games), "game_logs": kept, "players": len(seen), "unmatched": unmatched}
+        try:  # injuries are a nice-to-have: without them, the Yahoo tags are used
+            injuries = refresh_injuries()
+        except Exception as e:
+            log.warning("Injury list unavailable: %s", e)
+            injuries = None
+        result = {"season": season, "games": len(games), "game_logs": kept, "players": len(seen), "unmatched": unmatched,
+                  "injuries": injuries}
         log.info("NBA data refreshed: %s", result)
         return result
+
+
+def refresh_injuries() -> int:
+    """Replace the injury list (ESPN) and link each entry to an NBA player by name (and team when names repeat)."""
+    from app.nba.matching import norm_name
+
+    rows = client.fetch_injuries()
+    with SessionLocal() as db:
+        by_name: dict[str, list[NbaPlayer]] = {}
+        for p in db.query(NbaPlayer).all():
+            by_name.setdefault(norm_name(p.name), []).append(p)
+        db.execute(delete(NbaInjury))
+        for r in rows:
+            cands = by_name.get(norm_name(r["name"]), [])
+            if len(cands) > 1:
+                cands = [c for c in cands if c.team == norm_team(r["team"])] or cands
+            db.add(NbaInjury(nba_id=cands[0].id if len(cands) == 1 else None, name=r["name"], team=norm_team(r["team"]),
+                             status=r["status"], return_date=r["return_date"], injury=r["injury"], comment=r["comment"],
+                             reported=r["reported"]))
+        _set(db, "injuries_refreshed_at", datetime.now(UTC).replace(tzinfo=None).isoformat())
+        db.commit()
+    return len(rows)
 
 
 # ------------------------------------------------------------------ background refresh

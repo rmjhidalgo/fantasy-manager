@@ -16,6 +16,7 @@ from app.db.models import (
     GameLog,
     League,
     NbaGame,
+    NbaInjury,
     NbaPlayer,
     OutlookHistory,
     Ownership,
@@ -25,7 +26,7 @@ from app.db.models import (
 )
 from app.engine.alerts import LONG_OUT
 from app.engine.lineup import INACTIVE_SLOTS, Candidate, active_slots, optimize_day
-from app.engine.projections import project_players
+from app.engine.projections import injury_text, project_players
 from app.engine.schedule import Schedule, today_et
 from app.engine.simulator import matchup_outlook
 from app.nba import matching, sync
@@ -86,7 +87,13 @@ def nba_status() -> dict:
                     }
                 )
         unmatched.sort(key=lambda u: (not u["rostered"], u["name"]))
+        inj_at = db.get(AppSetting, "injuries_refreshed_at")
+        injuries = {
+            "count": db.scalar(select(func.count()).select_from(NbaInjury)),
+            "refreshed_at": _iso(datetime.fromisoformat(inj_at.value)) if inj_at and inj_at.value else None,
+        }
     return {
+        "injuries": injuries,
         "refreshed_at": _iso(sync.refreshed_at()),
         "season": season.value if season else None,
         "games": games,
@@ -186,6 +193,7 @@ def outlook() -> dict:
                     "source": proj[r.player_id].source if r.player_id in proj else "none",
                     "recent_mpg": proj[r.player_id].recent_mpg if r.player_id in proj else None,
                     "season_mpg": proj[r.player_id].season_mpg if r.player_id in proj else None,
+                    "injury": injury_text(proj[r.player_id], today) if r.player_id in proj else None,
                     "games_left": games_left.get(r.player_id, 0) if o else None,
                 }
                 for r in roster
@@ -215,7 +223,7 @@ def lineup(day: str | None = None) -> dict:
             if not p:
                 continue
             g = sched.game(p.nba_team, d)
-            prob = p.play_prob_on(sched.is_back_to_back(p.nba_team, d)) if g else 0.0
+            prob = p.play_prob_on(sched.is_back_to_back(p.nba_team, d), d) if g else 0.0
             started = bool(g and (g.status != 1 or (g.start_utc and g.start_utc <= now)))
             info[r.player_id] = {
                 "player_id": r.player_id,

@@ -40,15 +40,16 @@ class LineupValue:
         if pid not in self._vals:
             p = self.proj.get(pid)
             self._vals[pid] = [
-                p.play_prob_on(self.sched.is_back_to_back(p.nba_team, d)) * p.fpts if self.has_open_game(pid, i) else 0.0
+                p.play_prob_on(self.sched.is_back_to_back(p.nba_team, d), d) * p.fpts if self.has_open_game(pid, i) else 0.0
                 for i, d in enumerate(self.days)
             ]
         return self._vals[pid]
 
     def games(self, pid: int, start: int = 0, end: int | None = None) -> int:
-        """Games still to play from day index start to end (exclusive)."""
+        """Games he could play from day index start to end (exclusive): not started yet, and not while he's out injured."""
         stop = len(self.days) if end is None else end
-        return sum(1 for i in range(start, stop) if self.has_open_game(pid, i))
+        vals = self.values(pid)
+        return sum(1 for i in range(start, stop) if self.has_open_game(pid, i) and vals[i] > 0)
 
     def _variance(self, pid: int, i: int) -> float:
         """Spread of his points that day: plays with chance q, then scores around his projection."""

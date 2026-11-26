@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type FreeAgent, type FreeAgents } from "../api";
 import { formatWhen, hoursOld } from "../time";
-import { card, dayLabel, errText, Loading, Notice, select, StatusTag, YahooLink } from "../ui";
+import { card, dayLabel, errText, InjuryNote, Loading, Notice, select, StatusTag, YahooLink } from "../ui";
 
 const WINDOWS = [
   ["week", "Rest of this week"],
@@ -181,6 +181,7 @@ export default function FreeAgentsPage() {
                     {p.missed_streak >= 3 && (
                       <div className="text-xs text-amber-700 dark:text-amber-400">Missed his team's last {p.missed_streak} games</div>
                     )}
+                    <InjuryNote text={p.injury} />
                   </td>
                   <td className="py-1.5 pr-2 text-xs">
                     {kindLabel(p)}

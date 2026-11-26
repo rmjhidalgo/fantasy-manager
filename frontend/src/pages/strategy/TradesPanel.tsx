@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Horizon, type TeamRoster, type TradeAnalysis, type TradeIdeas } from "../../api";
-import { btn, card, dayLabel, errText, Loading, Notice, select, StatusTag, YahooLink } from "../../ui";
+import { btn, card, dayLabel, errText, InjuryNote, Loading, Notice, select, StatusTag, YahooLink } from "../../ui";
 
 const HORIZONS: [Horizon, string][] = [
   ["A", "This week"],
@@ -192,10 +192,12 @@ export default function TradesPanel() {
                       <td className="py-1.5 pr-2">
                         {t.give.name} <span className="text-xs text-slate-500">{t.give.fpts.toFixed(1)}</span>
                         <StatusTag status={t.give.status} />
+                        <InjuryNote text={t.give.injury} />
                       </td>
                       <td className="py-1.5 pr-2">
                         {t.get.name} <span className="text-xs text-slate-500">{t.get.fpts.toFixed(1)}</span>
                         <StatusTag status={t.get.status} />
+                        <InjuryNote text={t.get.injury} />
                       </td>
                       <td className="py-1.5 pr-2 text-right font-semibold tabular-nums text-green-700 dark:text-green-400">{signed(t.my_gain)}</td>
                       <td className="py-1.5 pr-2 text-right tabular-nums">{signed(t.their_gain)}</td>
@@ -286,6 +288,7 @@ function TradeResult({ r }: { r: TradeAnalysis }) {
                 <td className="py-1 pr-2">
                   {p.name}
                   <StatusTag status={p.status} /> <span className="text-xs text-slate-500">{p.nba_team}</span>
+                  <InjuryNote text={p.injury} />
                 </td>
                 <td className="py-1 pr-2 text-right tabular-nums">{p.fpts.toFixed(1)}</td>
                 <td className="py-1 pr-2 text-right tabular-nums">{p.games}</td>

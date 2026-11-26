@@ -330,7 +330,7 @@ function NbaDataCard({ onChanged }: { onChanged: () => void }) {
         </button>
       </div>
       <p className="mb-2 text-sm text-slate-500">
-        Schedule and box scores download automatically from NBA.com every 3 hours while the app runs.
+        Schedule and box scores (NBA.com) and the injury list with expected return dates (ESPN) download automatically every 3 hours while the app runs.
       </p>
       {st && (
         <p className="text-sm">
@@ -341,6 +341,12 @@ function NbaDataCard({ onChanged }: { onChanged: () => void }) {
           ) : (
             <span className="text-amber-700 dark:text-amber-400">Not downloaded yet.</span>
           )}
+        </p>
+      )}
+      {st?.injuries && (
+        <p className="text-sm text-slate-500">
+          Injury list (ESPN, with expected return dates):{" "}
+          {st.injuries.refreshed_at ? `${st.injuries.count} injured players, updated ${formatWhen(st.injuries.refreshed_at)}` : "not downloaded yet"}
         </p>
       )}
       {(error || st?.last_error) && (

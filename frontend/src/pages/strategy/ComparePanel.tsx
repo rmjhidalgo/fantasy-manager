@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type ComparedPlayer, type SearchHit } from "../../api";
-import { card, errText, Notice, StatusTag } from "../../ui";
+import { card, errText, InjuryNote, Notice, StatusTag } from "../../ui";
 
 const WINDOW_LABELS: Record<string, string> = {
   rest_of_week: "Rest of week",
@@ -74,7 +74,8 @@ export default function ComparePanel() {
     ["Games played", (p) => p.games_played],
     ["Floor – ceiling", (p) => (p.floor != null ? `${p.floor} – ${p.ceiling}` : "–")],
     ["Spread (± FP)", (p) => p.sd ?? "–"],
-    ["Chance to play", (p) => `${Math.round(p.play_prob * 100)}%`],
+    ["Chance to play (today)", (p) => `${Math.round(p.play_prob * 100)}%`],
+    ["Injury", (p) => (p.injury ? <InjuryNote text={p.injury} /> : "–")],
     ...Object.keys(WINDOW_LABELS).map(
       (k) => [`Games: ${WINDOW_LABELS[k]}`, (p: ComparedPlayer) => p.games[k] ?? "–"] as [string, (p: ComparedPlayer) => React.ReactNode],
     ),

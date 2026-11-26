@@ -18,6 +18,8 @@ HEADERS = {
 STATS_HEADERS = {**HEADERS, "x-nba-stats-origin": "stats", "x-nba-stats-token": "true"}
 
 SCHEDULE_URL = "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json"
+# Injured players with estimated return dates (ESPN's public injury list; the official NBA report is PDF only)
+INJURIES_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries"
 STATS_URL = "https://stats.nba.com/stats"
 
 
@@ -70,6 +72,27 @@ def fetch_game_logs(season: str) -> list[dict]:
             },
         )
     )
+
+
+def fetch_injuries() -> list[dict]:
+    """[{name, team, status, return_date, injury, comment, reported}] for every injured player."""
+    data = _get(INJURIES_URL, {"User-Agent": HEADERS["User-Agent"], "Accept": "application/json"})
+    out = []
+    for team in data.get("injuries", []):
+        for i in team.get("injuries", []):
+            a = i.get("athlete") or {}
+            d = i.get("details") or {}
+            injury = " - ".join(x for x in (d.get("type"), d.get("detail")) if x) or None
+            out.append({
+                "name": a.get("displayName") or "",
+                "team": (a.get("team") or {}).get("abbreviation"),
+                "status": i.get("status") or "Out",
+                "return_date": (d.get("returnDate") or "")[:10] or None,
+                "injury": injury,
+                "comment": i.get("shortComment"),
+                "reported": (i.get("date") or "")[:10] or None,
+            })
+    return out
 
 
 def fetch_player_index(season: str) -> list[dict]:

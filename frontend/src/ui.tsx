@@ -60,3 +60,13 @@ export function Loading({ error }: { error?: string | null }) {
 export function errText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
+
+/** "Out until about Jan 2 (Knee)": injured player's expected return (ESPN's estimate). */
+export function InjuryNote({ text }: { text: string | null | undefined }) {
+  if (!text) return null;
+  return (
+    <div className="text-xs text-red-700 dark:text-red-400" title="Expected return: ESPN's estimate, refreshed every few hours">
+      🩹 {text}
+    </div>
+  );
+}

@@ -149,6 +149,21 @@ class NbaPlayer(Base):
     position: Mapped[str | None] = mapped_column(String)  # NBA.com position: G, F, C, G-F, F-C, ...
 
 
+class NbaInjury(Base):
+    """An injured NBA player with an estimated return date (ESPN's public injury list, refreshed with NBA data)."""
+
+    __tablename__ = "nba_injuries"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nba_id: Mapped[int | None] = mapped_column(Integer, index=True)  # matched NBA player, if found
+    name: Mapped[str] = mapped_column(String)
+    team: Mapped[str | None] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String)  # "Out" | "Day-To-Day"
+    return_date: Mapped[str | None] = mapped_column(String)  # ISO date: first day he's expected to be able to play
+    injury: Mapped[str | None] = mapped_column(String)  # e.g. "Knee - Patellar tendon tear"
+    comment: Mapped[str | None] = mapped_column(Text)
+    reported: Mapped[str | None] = mapped_column(String)  # ISO date of the latest news
+
+
 class OutlookHistory(Base):
     """Win chance over the week: one point each time new data (an import or NBA refresh) changes the outlook."""
 

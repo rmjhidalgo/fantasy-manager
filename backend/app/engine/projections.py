@@ -9,6 +9,9 @@ Method (kept simple and explainable):
   slightly lower on the second night of a back-to-back.
   A player with no tag who has missed his team's last 3+ games is treated as doubtful:
   tags on saved pages can be out of date, box scores aren't.
+- Injured players on ESPN's injury list (refreshed with the NBA data) have an expected
+  return date: they count as out (or 50% if day-to-day) until then, and 90% from then on.
+  That list wins over a Yahoo tag, since it's newer.
 - No NBA games yet (or no NBA match): Yahoo's own season average, if imported.
 
 Players who aren't on any saved Yahoo page (worked out as available from NBA data) are
@@ -24,7 +27,7 @@ from datetime import date, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import GameLog, League, NbaGame, NbaPlayer, Player, PlayerMap, PlayerStats
+from app.db.models import GameLog, League, NbaGame, NbaInjury, NbaPlayer, Player, PlayerMap, PlayerStats
 from app.engine.scoring import fantasy_points, league_weights
 
 # window length in days (None = season) -> (weight, games needed for full weight)
@@ -44,6 +47,9 @@ PLAY_PROBABILITY = {
     "SUSP": 0.0,
 }
 BACK_TO_BACK_FACTOR = 0.95
+# Injury with an expected return date (ESPN): chance of playing before that day, and from it on
+INJURY_BEFORE_RETURN = {"Out": 0.0, "Day-To-Day": 0.5}
+PROB_AFTER_RETURN = 0.9  # first weeks back: some rest days and setbacks
 ABSENT_GAMES = 3  # missed this many team games in a row without a tag -> treat as doubtful
 ABSENT_PROBABILITY = 0.3
 
@@ -82,9 +88,33 @@ class Projection:
     positions_estimated: bool = False
     missed_streak: int = 0  # team games missed in a row, most recent first
     window_fp: dict[str, float | None] = field(default_factory=dict)  # L7 / L14 / L30 / S averages
+    # Injury with an expected return (ESPN injury list): chance of playing before / from that day
+    return_date: date | None = None
+    injury: dict | None = None  # {status, return_date, injury, comment, reported}
+    prob_before_return: float | None = None
+    prob_after_return: float | None = None
 
-    def play_prob_on(self, b2b: bool) -> float:
-        return self.play_prob * (BACK_TO_BACK_FACTOR if b2b else 1.0)
+    def play_prob_on(self, b2b: bool, day: date | None = None) -> float:
+        """Chance he plays on a given day (default: today's status). Knows the expected return of an injury."""
+        p = self.play_prob
+        if self.return_date is not None and day is not None:
+            p = self.prob_before_return if day < self.return_date else self.prob_after_return
+        return p * (BACK_TO_BACK_FACTOR if b2b else 1.0)
+
+    def available_from(self) -> date | None:
+        """First day he's expected to be able to play again, if he's out with a known return."""
+        return self.return_date if self.return_date is not None and self.prob_before_return == 0 else None
+
+
+def injury_text(p: Projection, today: date) -> str | None:
+    """'Out until about Jan 2 (Knee - Patellar tendon tear)' for players with a known expected return."""
+    if not p.injury or p.return_date is None or p.return_date <= today:
+        return None
+    what = f" ({p.injury['injury']})" if p.injury.get("injury") else ""
+    when = f"{p.return_date:%b} {p.return_date.day}"
+    if p.injury.get("status") == "Day-To-Day":
+        return f"Day-to-day until about {when}{what}"
+    return f"Out until about {when}{what}"
 
 
 def load_windows(db: Session) -> list[tuple[int | None, float, int]]:
@@ -135,6 +165,10 @@ class _Context:
         ):
             self.team_games[g.home].append(g.id)
             self.team_games[g.away].append(g.id)
+        # Injured players with an expected return date
+        self.injuries: dict[int, NbaInjury] = {
+            i.nba_id: i for i in db.scalars(select(NbaInjury).where(NbaInjury.nba_id.in_(nba_ids))) if i.nba_id
+        }
 
     def missed_streak(self, team: str | None, logs: list[GameLog]) -> int:
         if not team:
@@ -155,6 +189,15 @@ class _Context:
         if status is None and missed >= ABSENT_GAMES:
             prob = ABSENT_PROBABILITY
         common = dict(nba_id=nba_id, positions_estimated=positions_estimated, missed_streak=missed)
+        inj = self.injuries.get(nba_id) if nba_id else None
+        if inj is not None and inj.return_date:
+            # ESPN's list is refreshed every few hours, so it beats a Yahoo tag saved earlier
+            ret = date.fromisoformat(inj.return_date)
+            before = INJURY_BEFORE_RETURN.get(inj.status, 0.0)
+            common.update(return_date=ret, prob_before_return=before, prob_after_return=PROB_AFTER_RETURN,
+                          injury={"status": inj.status, "return_date": inj.return_date, "injury": inj.injury,
+                                  "comment": inj.comment, "reported": inj.reported})
+            prob = before if self.today < ret else PROB_AFTER_RETURN
         if logs:
             fp = [fantasy_points(g, self.weights) for g in logs]
             per_window, window_fp = [], {}

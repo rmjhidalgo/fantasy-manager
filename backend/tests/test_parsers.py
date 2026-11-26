@@ -119,6 +119,20 @@ def test_matchup_page():
     assert m.left.roster[0].player.id == 10276
 
 
+def test_matchup_page_totals_tab():
+    """The same page opened on its "Totals" tab (Yahoo's default when no games are live) has another layout."""
+    page, kind = load("Matchup totals tab.mhtml")
+    assert kind.page_type == "matchup"
+    m = P.parse_matchup(page.html, 70793)
+    assert (m.week, m.start_date, m.end_date) == (6, "2026-11-23", "2026-11-29")
+    assert (m.left.team_id, m.left.score, m.right.team_id, m.right.score) == (5, 806.0, 3, 546.0)
+    assert len(m.left.roster) == 15 and len(m.right.roster) == 15
+    assert (m.left.roster[0].slot, m.left.roster[0].player.id) == ("PG", 10276)
+    assert [e.slot for e in m.left.roster].count("IL") == 2
+    # A player dropped earlier in the week is listed with slot "--": he's no longer on the roster
+    assert "Isaiah Joe" not in {e.player.name for e in m.left.roster}
+
+
 def test_available_players_page():
     page, kind = load("Player List _ Fantasy")
     p = P.parse_players(page.html, 70793, kind.params, page.saved_at)

@@ -113,7 +113,7 @@ def plan_days(
             bench = [pid for pid in open_games if pid not in lineup and proj[pid].play_prob > 0]
         else:
             cands = [
-                Candidate(pid, proj[pid].positions, proj[pid].play_prob_on(sched.is_back_to_back(proj[pid].nba_team, d)) * proj[pid].fpts)
+                Candidate(pid, proj[pid].positions, proj[pid].play_prob_on(sched.is_back_to_back(proj[pid].nba_team, d), d) * proj[pid].fpts)
                 for pid in open_games
             ]
             lu = optimize_day(slots, cands)
@@ -131,7 +131,7 @@ def plan_days(
             else:
                 pending.append(pid)
                 p = proj[pid]
-                expected += p.play_prob_on(sched.is_back_to_back(p.nba_team, d)) * p.fpts
+                expected += p.play_prob_on(sched.is_back_to_back(p.nba_team, d), d) * p.fpts
         plans.append(DayPlan(d.isoformat(), lineup, round(expected, 2), round(actual, 2), pending, bench, use_page))
     return plans
 
@@ -143,7 +143,7 @@ def _simulate(plans: list[DayPlan], proj: dict[int, Projection], sched: Schedule
         d = date.fromisoformat(plan.date)
         for pid in plan.pending:
             p = proj[pid]
-            prob = p.play_prob_on(sched.is_back_to_back(p.nba_team, d))
+            prob = p.play_prob_on(sched.is_back_to_back(p.nba_team, d), d)
             plays = rng.random(SIMULATIONS) < prob
             pts = np.maximum(rng.normal(p.fpts, p.sd, SIMULATIONS), 0.0)
             total += plays * pts

@@ -3,6 +3,7 @@
 Analyzer: for a proposed trade, how many points each team's daily lineups gain or lose
 over a horizon (A this week, B next week, C next 5 weeks, D playoffs):
 - the trade takes effect after the league's review period ("Trade Reject Time", 2 days),
+- an injured player counts only from his expected return date (ESPN's injury list),
 - a team receiving more players than it sends drops its lowest-value players to fit,
 - lineup fit counts: a player only helps on days he'd actually start.
 
@@ -21,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.db.models import League
 from app.engine.lineup import active_slots
 from app.engine.lineup_value import LineupValue
-from app.engine.projections import Projection, project_players
+from app.engine.projections import Projection, injury_text, project_players
 from app.engine.rosters import team_names, team_rosters
 from app.engine.schedule import Schedule, today_et
 from app.engine.suggest import LONG_OUT, adjust_for_horizon, horizon_for
@@ -127,7 +128,8 @@ def _side(w: TradeWorld, team: int, out: list[int], inn: list[int]) -> dict:
 def _player(w: TradeWorld, pid: int) -> dict:
     p = w.proj[pid]
     return {"id": pid, "name": p.name, "nba_team": p.nba_team, "positions": p.positions, "status": p.status,
-            "fpts": p.fpts, "games": w.games(pid), "value": round(w.value(pid), 1)}
+            "fpts": p.fpts, "games": w.games(pid), "value": round(w.value(pid), 1),
+            "injury": injury_text(p, w.lv.today), "return_date": p.return_date.isoformat() if p.return_date else None}
 
 
 def analyze_trade(db: Session, league: League, my_team: int, other_team: int, give: list[int], get: list[int],

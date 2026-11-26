@@ -20,7 +20,7 @@ from app.db.models import League, Matchup, PlayerStats, RosterSlot
 from app.engine.lineup import active_slots
 from app.engine.lineup_value import LineupValue
 from app.engine.pool import PoolInfo, PoolPlayer, available_pool
-from app.engine.projections import Projection, project_nba_players, project_players
+from app.engine.projections import Projection, injury_text, project_nba_players, project_players
 from app.engine.schedule import Schedule, date_range, today_et
 from app.engine.untouchables import get_untouchables
 
@@ -152,7 +152,7 @@ def rank_free_agents(db: Session, league: League, team_id: int, window: str = "w
             "positions": p.positions,
             "positions_estimated": p.positions_estimated,
             "status": p.status,
-            "missed_streak": p.missed_streak,
+            "missed_streak": p.missed_streak, "injury": injury_text(p, ctx.today),
             "kind": pp.kind,
             "source": pp.source,
             "waiver_until": pp.waiver_until,

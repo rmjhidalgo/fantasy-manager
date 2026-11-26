@@ -16,7 +16,7 @@ from app.engine.freeagents import current_week
 from app.engine.lineup import INACTIVE_SLOTS, Candidate, active_slots, optimize_day
 from app.engine.next_man_up import next_man_up
 from app.engine.pool import available_pool
-from app.engine.projections import ABSENT_GAMES, project_players
+from app.engine.projections import ABSENT_GAMES, injury_text, project_players
 from app.engine.schedule import Schedule, today_et
 from app.nba import sync
 
@@ -62,12 +62,17 @@ def build_alerts(db: Session, league: League, now_utc: datetime | None = None) -
         if not p:
             continue
         in_lineup = r.slot not in INACTIVE_SLOTS
-        if r.slot in IL_SLOTS and p.status not in LONG_OUT | DOUBTFUL | {"P"}:
+        inj = injury_text(p, today)  # expected return from ESPN's injury list, if he's on it
+        out_now = p.status in LONG_OUT or (p.injury is not None and p.available_from() is not None and p.available_from() > today)
+        if r.slot in IL_SLOTS and p.status not in LONG_OUT | DOUBTFUL | {"P"} and not out_now:
             out.append(_alert(f"il-healthy:{r.player_id}", "danger", f"{p.name} is in an IL slot but no longer injured",
                               "Yahoo blocks adds and drops until he's moved out of the IL slot.", "lineup", player_id=r.player_id))
             continue
-        if p.status in LONG_OUT and r.slot not in IL_SLOTS:
-            detail = f"{STATUS_TEXT.get(p.status, p.status)}."
+        if out_now and r.slot not in IL_SLOTS:
+            label = STATUS_TEXT.get(p.status, p.status) if p.status in LONG_OUT else "Out"
+            detail = f"{inj} (ESPN's estimate)." if inj else f"{label}."
+            if p.status not in LONG_OUT:
+                detail += " Yahoo hasn't tagged him (on your saved pages) yet."
             if il_used < il_total:
                 detail += " An IL slot is free: moving him there opens a roster spot for a pickup."
             helpers = []
@@ -80,9 +85,13 @@ def build_alerts(db: Session, league: League, now_utc: datetime | None = None) -
                         "fpts_without": b.fpts_without, "games_without": b.games_without,
                         "available": pp is not None, "kind": pp.kind if pp else None, "yahoo_id": pp.yahoo_id if pp else None,
                     })
-            out.append(_alert(f"out:{r.player_id}:{p.status}", "danger" if in_lineup else "warn",
-                              f"{p.name} ({p.nba_team}): {STATUS_TEXT.get(p.status, p.status)}", detail,
-                              "lineup", player_id=r.player_id, next_man_up=helpers))
+            out.append(_alert(f"out:{r.player_id}:{p.status}:{p.return_date}", "danger" if in_lineup else "warn",
+                              f"{p.name} ({p.nba_team}): {label}", detail,
+                              "lineup", player_id=r.player_id, next_man_up=helpers, return_date=p.return_date.isoformat() if p.return_date else None))
+        elif r.slot in IL_SLOTS and inj:
+            out.append(_alert(f"il:{r.player_id}:{p.return_date}", "info", f"{p.name} (on IL): {inj[0].lower() + inj[1:]}",
+                              "ESPN's estimate. Move him back to your lineup when he returns.", "lineup", player_id=r.player_id,
+                              notify=False))
         elif p.status in DOUBTFUL:
             out.append(_alert(f"doubt:{r.player_id}:{p.status}", "warn", f"{p.name} ({p.nba_team}): {STATUS_TEXT[p.status]}",
                               "Check before his game; the projections count him at reduced odds.", "lineup", player_id=r.player_id))
@@ -104,7 +113,7 @@ def build_alerts(db: Session, league: League, now_utc: datetime | None = None) -
         if g:
             if g.status == 1 and not (g.start_utc and g.start_utc <= now):
                 has_game.append(r.player_id)  # can still be moved into the lineup
-            cands.append(Candidate(r.player_id, p.positions, p.play_prob_on(sched.is_back_to_back(p.nba_team, today)) * p.fpts))
+            cands.append(Candidate(r.player_id, p.positions, p.play_prob_on(sched.is_back_to_back(p.nba_team, today), today) * p.fpts))
         elif r.slot not in INACTIVE_SLOTS:
             starters_no_game.append(p.name)
     best = optimize_day(slots, cands)
