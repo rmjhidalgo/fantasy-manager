@@ -145,7 +145,7 @@ export default function ComparePanel() {
             </tbody>
           </table>
           <p className="mt-2 text-xs text-slate-500">
-            Floor/ceiling = the 25th/75th percentile of his games this season. Games counted from today, US time.
+            Floor/ceiling = the 25th/75th percentile of his games this season. Games counted from today's NBA game day (US date).
           </p>
         </div>
       )}

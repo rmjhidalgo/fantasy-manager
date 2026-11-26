@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type LineupDay, type Outlook } from "../api";
 import { card, dayLabel, errText, Loading, Notice, select, StatusTag, YahooLink } from "../ui";
+import { formatTime } from "../time";
 
 function addDays(iso: string, n: number): string {
   const d = new Date(iso + "T12:00:00Z");
@@ -42,8 +43,7 @@ export default function LineupPage({ outlook }: { outlook: Outlook | null }) {
             <select value={chosen ?? ""} onChange={(e) => setDay(e.target.value)} className={select}>
               {options.map((d) => (
                 <option key={d} value={d}>
-                  {dayLabel(d)}
-                  {d === today ? " (today, US time)" : ""}
+                  {dayLabel(d)} (US){d === today ? " · today's NBA day" : ""}
                 </option>
               ))}
             </select>
@@ -102,7 +102,7 @@ export default function LineupPage({ outlook }: { outlook: Outlook | null }) {
                       {p.game && !p.game.started && p.game.start_utc && (
                         <span className="text-slate-500">
                           {" "}
-                          {new Date(p.game.start_utc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {formatTime(p.game.start_utc)}
                         </span>
                       )}
                       {p.locked && <span className="text-slate-500"> · 🔒 started</span>}
@@ -113,7 +113,7 @@ export default function LineupPage({ outlook }: { outlook: Outlook | null }) {
               </tbody>
             </table>
             <p className="text-xs text-slate-500">
-              Game times are in your local time. Expected = projected points × chance of playing. Make the changes on Yahoo: the
+              Days are US game days (Yahoo's); tip-off times are in your time zone. Expected = projected points × chance of playing. Make the changes on Yahoo: the
               button opens your team page for this day.
             </p>
           </div>

@@ -75,7 +75,7 @@ export default function SuggestPage({ outlook }: { outlook: Outlook | null }) {
                 {data.horizon_name}: {data.label}{" "}
                 {data.days.length > 0 && (
                   <span className="text-sm font-normal text-slate-500">
-                    ({dayLabel(data.days[0])} – {dayLabel(data.days[data.days.length - 1])})
+                    ({dayLabel(data.days[0])} – {dayLabel(data.days[data.days.length - 1])}, US dates)
                   </span>
                 )}
               </h2>
@@ -148,7 +148,7 @@ export default function SuggestPage({ outlook }: { outlook: Outlook | null }) {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                          {i + 1}. {m.type} · {data.horizon === "A" ? `counts from ${dayLabel(m.first_day)}` : `${m.games} games in window`}
+                          {i + 1}. {m.type} · {data.horizon === "A" ? `counts from ${dayLabel(m.first_day)} (US)` : `${m.games} games in window`}
                         </div>
                         <div className="mt-0.5">
                           <span className="font-semibold text-green-700 dark:text-green-400">Add</span> {m.add.name}

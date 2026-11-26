@@ -18,7 +18,7 @@ const STATS = [
 
 function kindLabel(p: FreeAgent): string {
   if (p.kind === "FA") return "Free agent";
-  if (p.kind === "W") return p.waiver_until ? `Waivers → ${dayLabel(p.waiver_until)}` : "Waivers";
+  if (p.kind === "W") return p.waiver_until ? `Waivers → ${dayLabel(p.waiver_until)} (US)` : "Waivers";
   return "Not on a saved page";
 }
 
@@ -137,7 +137,7 @@ export default function FreeAgentsPage() {
         <h2 className="mb-1 font-semibold">
           Best pickups · {data.window_label}{" "}
           <span className="text-sm font-normal text-slate-500">
-            ({dayLabel(data.days[0])} – {dayLabel(data.days[data.days.length - 1])})
+            ({dayLabel(data.days[0])} – {dayLabel(data.days[data.days.length - 1])}, US dates)
           </span>
         </h2>
         <p className="mb-3 text-sm text-slate-500">

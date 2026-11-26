@@ -123,7 +123,8 @@ def build_alerts(db: Session, league: League, now_utc: datetime | None = None) -
     if benched:
         out.append(_alert(f"bench:{today}:{','.join(sorted(benched))}", "warn",
                           f"Start {', '.join(benched)} today", "They have games but are on your bench (as last saved).", "lineup"))
-    if empty > 0:
+    nba_games_today = any(g.date_et == today.isoformat() for g in sched.games)
+    if empty > 0 and nba_games_today:  # no NBA games at all (e.g. Thanksgiving): nothing to fill
         out.append(_alert(f"empty:{today}:{empty}", "info", f"{empty} empty lineup slot{'s' if empty > 1 else ''} today",
                           f"Only {len(best.assignments)} of your players can fill a slot today. A streamer could use the gap.",
                           "streaming"))

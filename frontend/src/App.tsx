@@ -11,6 +11,7 @@ import SettingsPage from "./pages/SettingsPage";
 import StrategyPage from "./pages/StrategyPage";
 import StreamingPage from "./pages/StreamingPage";
 import SuggestPage from "./pages/SuggestPage";
+import TimeBar from "./components/TimeBar";
 
 type Tab = "overview" | NavTarget;
 
@@ -112,7 +113,10 @@ export default function App() {
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-          <h1 className="text-lg font-semibold">🏀 Fantasy Manager</h1>
+          <div>
+            <h1 className="text-lg font-semibold">🏀 Fantasy Manager</h1>
+            <TimeBar />
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             {askClaude && (
               <a

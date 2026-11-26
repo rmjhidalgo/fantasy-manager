@@ -70,3 +70,15 @@ def test_alert_when_espn_says_out_before_yahoo_tags_him(small_league):
         alerts = build_alerts(db, db.get(League, 1), now_utc=NOW)
     a = next(x for x in alerts if x["key"].startswith("out:101"))
     assert a["level"] == "danger" and "Out until about Nov 27" in a["detail"] and "Yahoo hasn't tagged him" in a["detail"]
+
+
+def test_no_empty_slot_alert_on_a_day_without_nba_games(small_league):
+    from datetime import datetime
+
+    with SessionLocal() as db:
+        # Mon 11/30: no NBA games at all in this made-up league -> nothing a streamer could fill
+        quiet = build_alerts(db, db.get(League, 1), now_utc=datetime(2026, 11, 30, 15))
+        # Tue 11/24: other teams play, none of mine -> the empty slots are worth filling
+        busy = build_alerts(db, db.get(League, 1), now_utc=datetime(2026, 11, 24, 15))
+    assert not any(a["key"].startswith("empty:") for a in quiet)
+    assert any(a["key"].startswith("empty:2026-11-24") for a in busy)

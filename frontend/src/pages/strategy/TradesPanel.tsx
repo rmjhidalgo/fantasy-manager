@@ -236,7 +236,7 @@ function TradeResult({ r }: { r: TradeAnalysis }) {
     <div className="mt-4 space-y-3">
       <Notice tone={tone}>
         <b>{r.verdict}</b> over {r.label}
-        {r.days.length > 0 && ` (${dayLabel(r.days[0])} – ${dayLabel(r.days[1])})`}. Takes effect {dayLabel(r.effective)} after the
+        {r.days.length > 0 && ` (${dayLabel(r.days[0])} – ${dayLabel(r.days[1])}, US dates)`}. Takes effect {dayLabel(r.effective)} (US) after the
         league's review period.
         {r.deadline && ` Trade deadline: ${dayLabel(r.deadline)}.`}
       </Notice>

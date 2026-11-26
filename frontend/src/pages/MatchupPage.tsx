@@ -27,7 +27,7 @@ export default function MatchupPage({ version }: { version: number }) {
       <section className={card}>
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-semibold">
-            Week {m.week} <span className="text-sm font-normal text-slate-500">{dayLabel(m.start_date)} – {dayLabel(m.end_date)}</span>
+            Week {m.week} <span className="text-sm font-normal text-slate-500">{dayLabel(m.start_date)} – {dayLabel(m.end_date)} (US dates)</span>
           </h2>
           <YahooLink href={m.yahoo_url} />
         </div>
@@ -56,7 +56,7 @@ export default function MatchupPage({ version }: { version: number }) {
         <table className="w-full text-sm">
           <thead className="text-left text-slate-500">
             <tr>
-              <th className="py-1 font-medium">Day</th>
+              <th className="py-1 font-medium" title="NBA game days are US Eastern dates">Day (US)</th>
               <th className="py-1 text-right font-medium">{m.me.name ?? "You"}</th>
               <th className="py-1 text-right font-medium">{m.opp.name ?? "Opponent"}</th>
             </tr>
@@ -122,7 +122,7 @@ function PlayerGrid({ side, days }: { side: MatchupSide; days: string[] }) {
             <tr>
               <th className="py-1 pr-2 text-left font-medium">Player</th>
               {days.map((d) => (
-                <th key={d} className="px-1 py-1 text-center text-xs font-medium">
+                <th key={d} className="px-1 py-1 text-center text-xs font-medium" title={`${d} (US game day)`}>
                   {shortDay(d)}
                 </th>
               ))}

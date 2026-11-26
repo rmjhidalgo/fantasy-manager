@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type AssistantStatus, type Horizon, type SummarySettings, type Tuning } from "../api";
-import { formatWhen, hoursOld } from "../time";
+import { formatWhen, hoursOld, myZone } from "../time";
 import { btn, card, errText, Loading, Notice, select } from "../ui";
 
 function SummarySettingsCard() {
@@ -42,6 +42,7 @@ function SummarySettingsCard() {
           onChange={(e) => e.target.value && save({ ...s, time: e.target.value })}
           className="rounded-md border border-slate-300 bg-transparent px-2 py-1 dark:border-slate-700"
         />
+        <span className="text-slate-500">your time{myZone() ? ` (${myZone()})` : ""}</span>
         <label className="flex items-center gap-2">
           <span className="text-slate-500">Moves for</span>
           <select value={s.horizon} onChange={(e) => save({ ...s, horizon: e.target.value as Horizon })} className={select}>

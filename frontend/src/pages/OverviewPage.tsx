@@ -188,7 +188,7 @@ function MatchupCard({ data, outlook, onDetails }: { data: Overview; outlook: Ou
         <h2 className="font-semibold">
           Week {m.week} matchup{" "}
           <span className="text-sm font-normal text-slate-500">
-            {m.start_date && dayLabel(m.start_date)} – {m.end_date && dayLabel(m.end_date)}
+            {m.start_date && dayLabel(m.start_date)} – {m.end_date && dayLabel(m.end_date)} (US dates)
           </span>
         </h2>
         <button onClick={onDetails} className="text-sm text-blue-700 hover:underline dark:text-blue-300">

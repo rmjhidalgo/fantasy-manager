@@ -74,7 +74,7 @@ export default function StreamingPage() {
           Streaming plan · {data.window_label}{" "}
           {data.days.length > 0 && (
             <span className="text-sm font-normal text-slate-500">
-              ({dayLabel(data.days[0])} – {dayLabel(data.days[data.days.length - 1])})
+              ({dayLabel(data.days[0])} – {dayLabel(data.days[data.days.length - 1])}, US dates)
             </span>
           )}
         </h2>
@@ -102,7 +102,7 @@ export default function StreamingPage() {
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                        Step {i + 1} · {dayLabel(m.date)}
+                        Step {i + 1} · {dayLabel(m.date)} (US)
                       </div>
                       <div className="mt-0.5">
                         <span className="font-semibold text-green-700 dark:text-green-400">Add</span> {m.add.name}
