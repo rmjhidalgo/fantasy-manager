@@ -89,7 +89,7 @@ def test_import_checklist(season):
     with TestClient(app) as client:
         c = client.get("/api/import/checklist").json()
     keys = [i["key"] for i in c["setup"]] + [i["key"] for i in c["regular"]]
-    assert keys == ["settings", "schedule", "my_team", "matchup", "league_home", "available", "taken"]
+    assert keys == ["settings", "schedule", "my_team", "matchup", "league_home", "transactions", "available", "taken"]
     sched = c["setup"][1]
     assert sched["status"] == "missing" and sched["teams_total"] == 4
     with SessionLocal() as db:  # Mine's whole season saved: Mine is done; its opponents only partly known

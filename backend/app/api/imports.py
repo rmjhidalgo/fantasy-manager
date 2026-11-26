@@ -116,6 +116,9 @@ def import_checklist() -> dict:
                 item("my_team", roster_at, 24),
                 item("matchup", mu_at, 24),
                 item("league_home", lg.standings_as_of, 24),
+                item("transactions", db.scalar(select(func.max(ImportRecord.saved_at)).where(
+                    ImportRecord.league_id == lg.id, ImportRecord.page_type == "transactions",
+                    ImportRecord.status.in_(("imported", "partial")))), 24),
                 item("available", info.available_as_of, 72),
                 item("taken", info.rostered_as_of, 24 * 7, players=info.rostered_count),
             ],

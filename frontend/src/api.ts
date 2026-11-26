@@ -404,7 +404,7 @@ export type ScoringProfile = {
 };
 
 export type ChecklistItem = {
-  key: "settings" | "schedule" | "my_team" | "matchup" | "league_home" | "available" | "taken";
+  key: "settings" | "schedule" | "my_team" | "matchup" | "league_home" | "transactions" | "available" | "taken";
   saved_at: string | null;
   status: "ok" | "old" | "missing" | "partial";
   teams_done?: number;

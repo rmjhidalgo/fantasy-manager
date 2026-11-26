@@ -94,6 +94,9 @@ def test_parse_moves():
     d = "Grayson Allen CHA - SG,SF O To Waivers Buddy Hield CHI - SG,SF Free Agent"
     assert parse_moves(d) == [("Grayson Allen", "drop"), ("Buddy Hield", "add")]
     assert parse_moves("Danny Wolf BKN - PF,C To Waivers") == [("Danny Wolf", "drop")]
+    # Waiver claims say "Waiver" on Yahoo's pages
+    assert parse_moves("Jrue Holiday POR - PG,SG Waiver Quenton Jackson IND - PG,SG To Waivers") == [
+        ("Jrue Holiday", "add"), ("Quenton Jackson", "drop")]
 
 
 def test_transaction_time_converted_to_us_eastern():

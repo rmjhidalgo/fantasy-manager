@@ -175,6 +175,7 @@ def _store(db: Session, kind: PageKind, html: str, saved_at: datetime, result: I
         "team": _store_team,
         "matchup": _store_matchup,
         "players": _store_players,
+        "transactions": _store_transactions,
     }[kind.page_type]
     handler(db, league, kind, html, saved_at, result)
 
@@ -202,18 +203,10 @@ def _store_settings(db, league: League, kind, html, saved_at, result) -> None:
     result.summary = f"Scoring: {scoring}. {len(s.roster_positions)} roster spots, {s.max_adds_per_week} adds per week."
 
 
-def _store_league_home(db, league: League, kind, html, saved_at, result) -> None:
-    page = P.parse_league_home(html, league.id)
-    if _newer(saved_at, league.standings_as_of):
-        for r in page.standings:
-            t = db.get(FantasyTeam, (league.id, r.team_id)) or FantasyTeam(league_id=league.id, team_id=r.team_id)
-            t.name, t.rank, t.wins, t.losses, t.ties = r.name, r.rank, r.wins, r.losses, r.ties
-            t.points_for, t.waiver_priority, t.moves, t.as_of = r.points_for, r.waiver_priority, r.moves, saved_at
-            db.add(t)
-        league.standings_as_of = saved_at
-    old_standings = not _newer(saved_at, league.standings_as_of) and league.standings_as_of is not None
+def _add_transactions(db: Session, league: League, rows: list[P.TransactionRow], saved_at: datetime) -> int:
+    """Store transactions not seen before (the League page and the Transactions page list the same ones)."""
     new_tx = 0
-    for tx in page.transactions:
+    for tx in rows:
         exists = db.scalar(
             select(Transaction).where(
                 Transaction.league_id == league.id,
@@ -224,7 +217,30 @@ def _store_league_home(db, league: League, kind, html, saved_at, result) -> None
         )
         if not exists:
             db.add(Transaction(league_id=league.id, team_name=tx.team_name, when_text=tx.when_text, description=tx.description, as_of=saved_at))
+            db.flush()
             new_tx += 1
+    return new_tx
+
+
+def _store_transactions(db, league: League, kind, html, saved_at, result) -> None:
+    rows = P.parse_transactions(html)
+    if not rows:
+        raise P.ParseError("No transactions found")
+    new_tx = _add_transactions(db, league, rows, saved_at)
+    result.summary = f"{len(rows)} transactions ({new_tx} new), from {rows[-1].when_text} to {rows[0].when_text}."
+
+
+def _store_league_home(db, league: League, kind, html, saved_at, result) -> None:
+    page = P.parse_league_home(html, league.id)
+    if _newer(saved_at, league.standings_as_of):
+        for r in page.standings:
+            t = db.get(FantasyTeam, (league.id, r.team_id)) or FantasyTeam(league_id=league.id, team_id=r.team_id)
+            t.name, t.rank, t.wins, t.losses, t.ties = r.name, r.rank, r.wins, r.losses, r.ties
+            t.points_for, t.waiver_priority, t.moves, t.as_of = r.points_for, r.waiver_priority, r.moves, saved_at
+            db.add(t)
+        league.standings_as_of = saved_at
+    old_standings = not _newer(saved_at, league.standings_as_of) and league.standings_as_of is not None
+    new_tx = _add_transactions(db, league, page.transactions, saved_at)
     # This week's matchups (all teams): pairings and live scores
     for mu in page.matchups:
         for me, opp, s, o in ((mu.team1, mu.team2, mu.score1, mu.score2), (mu.team2, mu.team1, mu.score2, mu.score1)):

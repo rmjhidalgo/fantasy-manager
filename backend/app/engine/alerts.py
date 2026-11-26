@@ -133,7 +133,7 @@ def build_alerts(db: Session, league: League, now_utc: datetime | None = None) -
     week, start, end = current_week(db, league, team_id, today)
     a = adds_used(db, league, team_id, week, start, end)
     if a["limit"] is not None:
-        src = "the number you entered" if a["source"] == "you" else "counted from imported transactions, so it may be more"
+        src = "the number you entered" if a["source"] == "you" else "counted from your saved Transactions/League pages (save Transactions daily for an exact count)"
         out.append(_alert(f"adds:{week}:{a['used']}", "info", f"Adds this week: {a['used']} of {a['limit']} used",
                           f"{a['left']} left. Used = {src}.", "streaming", notify=False))
 

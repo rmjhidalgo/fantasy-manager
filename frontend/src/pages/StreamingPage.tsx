@@ -62,9 +62,9 @@ export default function StreamingPage() {
         )}
         {a.source === "transactions" && (
           <p className="mt-2 text-xs text-slate-500">
-            Counted from the transactions on your last saved League page
-            {a.counted_from.length > 0 && `: ${a.counted_from.map((c) => c.description.split(" - ")[0] + ` (${c.when})`).join(", ")}`}. Only
-            recent transactions appear there, so pick the real number if it's higher.
+            Counted from your saved Transactions and League pages
+            {a.counted_from.length > 0 && `: ${a.counted_from.map((c) => c.description.split(" - ")[0] + ` (${c.when})`).join(", ")}`}. Save the
+            League → Transactions page daily for an exact count, or pick the real number here if it's higher.
           </p>
         )}
       </section>

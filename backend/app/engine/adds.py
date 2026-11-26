@@ -1,8 +1,9 @@
 """Adds used this week: from your own entry, or counted from imported transactions.
 
-Yahoo's League page lists recent transactions with times shown in your Yahoo time zone
-(the one in the settings page, e.g. "Draft Time: Sun Oct 11 10:00pm JST"). Only the latest
-few appear there, so the count is a minimum; your own entry always wins.
+Transactions come from the League → Transactions page (every add and drop, 25 per page)
+and the League main page (only the latest few). Times are in your Yahoo time zone (the
+one on the settings page, e.g. "Draft Time: Sun Oct 11 10:00pm JST") and are converted
+to US Eastern days to find this week's adds. Your own entry always wins.
 """
 
 import json
@@ -56,7 +57,7 @@ def transaction_date_et(when_text: str | None, zone: ZoneInfo, near: date) -> da
 
 
 # "Buddy Hield CHI - SG,SF Free Agent Jaylen Wells MEM - SG,SF To Waivers" (an injury tag may follow the positions)
-_MOVE = re.compile(r"\s*(?P<name>.+?) (?P<team>[A-Z]{2,4}) - (?P<pos>[A-Z,]+)(?: (?P<tag>[A-Z]{1,4}))? (?P<how>To Waivers|Free Agent|Waivers)")
+_MOVE = re.compile(r"\s*(?P<name>.+?) (?P<team>[A-Z]{2,4}) - (?P<pos>[A-Z,]+)(?: (?P<tag>[A-Z]{1,4}))? (?P<how>To Waivers|Free Agent|Waivers|Waiver)")
 
 
 def parse_moves(description: str) -> list[tuple[str, str]]:

@@ -336,6 +336,28 @@ def parse_league_home(html: str, league_id: int) -> LeagueHomePage:
     return LeagueHomePage(rows, txs, _league_matchups(soup, league_id), _team_schedule(soup, league_id))
 
 
+# ---------------------------------------------------------------- transactions page
+
+def parse_transactions(html: str) -> list[TransactionRow]:
+    """League → Transactions: every add, drop and trade with its time, newest first (25 per page)."""
+    soup = soup_of(html)
+    table = next((t for t in soup.find_all("table") if "Tst-transaction-table" in (t.get("class") or [])), None)
+    if table is None:
+        raise ParseError("Transactions table not found")
+    out: list[TransactionRow] = []
+    for tr in table.find_all("tr"):
+        tds = tr.find_all("td", recursive=False)
+        if len(tds) < 3:
+            continue
+        desc = _text(tds[1])
+        team_a = tds[2].find("a", class_="Tst-team-name") or next((a for a in tds[2].find_all("a") if _text(a)), None)
+        team_name = _text(team_a) or None if team_a else None
+        when = _text(tds[2]).replace(team_name or "", "", 1).strip() or None
+        if desc:
+            out.append(TransactionRow(team_name, when, desc))
+    return out
+
+
 # ---------------------------------------------------------------- team roster
 
 @dataclass

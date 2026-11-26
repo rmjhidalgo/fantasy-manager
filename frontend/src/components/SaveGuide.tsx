@@ -36,7 +36,7 @@ const SETUP: Step[] = [
 
 const REGULAR: { when: string; why: string; steps: Step[] }[] = [
   {
-    when: "Every day, before the games (about 1 minute)",
+    when: "Every day, before the games (1–2 minutes)",
     why: "Keeps your lineup, matchup and alerts right.",
     steps: [
       {
@@ -66,6 +66,17 @@ const REGULAR: { when: string; why: string; steps: Step[] }[] = [
         how: (
           <>
             Click your <b>league's name</b> → save.
+          </>
+        ),
+      },
+      {
+        key: "transactions",
+        title: "Transactions",
+        what: "Every add and drop with its date, so your adds used this week are counted exactly.",
+        how: (
+          <>
+            Open your league's <b>League</b> menu → <b>Transactions</b> → save. (The first page is enough; save the next page too if
+            your league made more than 25 moves this week.)
           </>
         ),
       },

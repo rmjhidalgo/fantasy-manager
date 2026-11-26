@@ -12,12 +12,13 @@ _NAMED = {
     "matchup": "matchup",
     "players": "players",
     "standings": "standings",
+    "transactions": "transactions",
 }
 
 
 @dataclass
 class PageKind:
-    page_type: str  # settings | league_home | standings | team | matchup | players
+    page_type: str  # settings | league_home | standings | team | matchup | players | transactions
     league_id: int
     team_id: int | None = None
     params: dict[str, str] = field(default_factory=dict)
@@ -51,4 +52,5 @@ PAGE_LABELS = {
     "team": "Team roster",
     "matchup": "Matchup",
     "players": "Players list",
+    "transactions": "Transactions",
 }

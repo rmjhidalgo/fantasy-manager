@@ -133,6 +133,34 @@ def test_matchup_page_totals_tab():
     assert "Isaiah Joe" not in {e.player.name for e in m.left.roster}
 
 
+def test_transactions_page():
+    page, kind = load("Transactions.mhtml")
+    assert kind.page_type == "transactions"
+    rows = P.parse_transactions(page.html)
+    assert len(rows) >= 25
+    joe = next(r for r in rows if r.description.startswith("Isaiah Joe") and r.team_name == "PokemonPinoys")
+    assert joe.when_text == "Nov 25, 6:56 am"
+
+
+def test_transactions_page_counts_this_weeks_adds(fresh_db):
+    """Two adds this week: Isaiah Joe (Nov 24 US) and Isaac Okoro (Nov 25 US); the League page alone showed only one."""
+    from datetime import date
+
+    from app.db import SessionLocal
+    from app.db.models import League
+    from app.engine.adds import adds_used
+    from app.importer.service import import_path
+
+    import_path(fixture("settings.html"))  # time zone (JST) and add limit
+    import_path(fixture("Engineering Fantasy League _ Fantasy"))  # team names
+    r = import_path(fixture("Transactions.mhtml"))
+    assert r.status == "imported" and r.page_type == "transactions"
+    with SessionLocal() as db:
+        a = adds_used(db, db.get(League, 70793), 5, 6, date(2026, 11, 23), date(2026, 11, 29))
+    assert (a["used"], a["left"], a["counted"]) == (2, 1, 2)
+    assert sorted(" ".join(c["description"].split(" ")[:2]) for c in a["counted_from"]) == ["Isaac Okoro", "Isaiah Joe"]
+
+
 def test_available_players_page():
     page, kind = load("Player List _ Fantasy")
     p = P.parse_players(page.html, 70793, kind.params, page.saved_at)
