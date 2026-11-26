@@ -72,6 +72,15 @@ def fetch_game_logs(season: str) -> list[dict]:
     )
 
 
+def fetch_player_index(season: str) -> list[dict]:
+    """Current players with their NBA.com position (G, F, C, G-F, F-C, ...)."""
+    params = {
+        "LeagueID": "00", "Season": season, "Historical": 0, "TeamID": 0, "Active": "", "AllStar": "", "College": "",
+        "Country": "", "DraftPick": "", "DraftRound": "", "DraftYear": "", "Height": "", "Weight": "", "PlayerPosition": "",
+    }
+    return _rows(_get(f"{STATS_URL}/playerindex", STATS_HEADERS, params))
+
+
 def fetch_players(season: str) -> list[dict]:
     """All players on NBA rosters this season (including ones who haven't played yet)."""
     return _rows(

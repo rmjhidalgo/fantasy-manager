@@ -128,6 +128,8 @@ export type LineupDay = {
   slots: string[];
   best_expected: number;
   current_expected: number;
+  il_moves: IlMove[];
+  yahoo_url: string;
   players: {
     player_id: number;
     name: string;
@@ -140,6 +142,157 @@ export type LineupDay = {
     expected: number;
     game: { opponent: string; start_utc: string | null; final: boolean; started: boolean } | null;
   }[];
+};
+
+export type IlMove = { player_id: number; name: string; move: "to IL" | "activate"; reason: string };
+
+export type AlertItem = {
+  key: string;
+  level: "danger" | "warn" | "info";
+  title: string;
+  detail: string;
+  action: "lineup" | "streaming" | "import" | null;
+  notify: boolean;
+  player_id?: number;
+  next_man_up?: {
+    name: string;
+    minutes_with: number;
+    minutes_without: number;
+    fpts_without: number;
+    games_without: number;
+    available: boolean;
+    kind: string | null;
+    yahoo_url: string | null;
+  }[];
+};
+
+export type FreeAgent = {
+  id: number;
+  yahoo_id: number | null;
+  name: string;
+  nba_team: string | null;
+  positions: string[];
+  positions_estimated: boolean;
+  status: string | null;
+  missed_streak: number;
+  kind: "FA" | "W" | "?";
+  source: "page" | "nba";
+  waiver_until: string | null;
+  available_from: string;
+  fpts: number;
+  play_prob: number;
+  window_fp: { L7?: number | null; L14?: number | null; L30?: number | null; S?: number | null };
+  recent_mpg: number | null;
+  season_mpg: number | null;
+  pct_rostered: number | null;
+  games: number;
+  raw_expected: number;
+  gain: number | null;
+  drop: number | null;
+  drop_name: string | null;
+  vs_drop: number | null;
+  note: string | null;
+  yahoo_url: string;
+};
+
+export type FreeAgents = {
+  window: string;
+  window_label: string;
+  days: string[];
+  open_spots: number;
+  drop_candidates: { id: number; name: string; fpts: number }[];
+  pool: {
+    from_pages: number;
+    from_nba: number;
+    available_as_of: string | null;
+    rostered_as_of: string | null;
+    rostered_count: number;
+    from_transactions: number;
+  };
+  available_url: string;
+  players: FreeAgent[];
+};
+
+export type Adds = {
+  week: number | null;
+  limit: number | null;
+  used: number;
+  left: number | null;
+  manual: number | null;
+  counted: number;
+  counted_from: { when: string; description: string; adds: number }[];
+  source: "you" | "transactions";
+};
+
+export type Streaming = {
+  days: string[];
+  window_label: string;
+  adds_left: number;
+  baseline: number;
+  with_moves: number;
+  gain: number;
+  open_spots: number;
+  min_gain: number;
+  keep_tolerance: number;
+  adds: Adds;
+  moves: {
+    date: string;
+    add: {
+      id: number;
+      yahoo_id: number | null;
+      name: string;
+      nba_team: string | null;
+      positions: string[];
+      positions_estimated: boolean;
+      kind: string;
+      source: string;
+      fpts: number;
+      status: string | null;
+    };
+    drop: { id: number; name: string; fpts: number } | null;
+    drop_is_streamer: boolean;
+    games: number;
+    game_dates: string[];
+    gain: number;
+    yahoo_url: string;
+  }[];
+};
+
+export type MatchupSide = {
+  team_id: number;
+  name: string | null;
+  current: number;
+  final_expected: number;
+  final_p10: number;
+  final_p90: number;
+  games_left: number;
+  days: { date: string; expected: number; actual: number; starters: number; pending: number; conflicts: number; from_page: boolean }[];
+  players: {
+    player_id: number;
+    name: string;
+    nba_team: string | null;
+    positions: string[];
+    status: string | null;
+    fpts: number | null;
+    days: Record<string, "pending" | "final" | "bench">;
+    starts: number;
+    benched: number;
+  }[];
+};
+
+export type MatchupDetail = {
+  matchup: {
+    week: number;
+    start_date: string;
+    end_date: string;
+    as_of: string | null;
+    win_prob: number;
+    me: MatchupSide;
+    opp: MatchupSide;
+    notes: string[];
+    yahoo_url: string;
+  } | null;
+  history: { at: string; win_prob: number; my_final: number; opp_final: number }[];
 };
 
 export type NbaStatus = {
@@ -191,6 +344,18 @@ export const api = {
   },
   outlook: () => fetch("/api/outlook").then((r) => json<Outlook>(r)),
   lineup: (day?: string) => fetch(`/api/lineup${day ? `?day=${day}` : ""}`).then((r) => json<LineupDay>(r)),
+  matchup: () => fetch("/api/matchup").then((r) => json<MatchupDetail>(r)),
+  alerts: () => fetch("/api/alerts").then((r) => json<{ league_id: number; alerts: AlertItem[] }>(r)),
+  freeAgents: (window: string, position: string) =>
+    fetch(`/api/free-agents?window=${window}${position ? `&position=${position}` : ""}`).then((r) => json<FreeAgents>(r)),
+  streaming: (adds_left?: number) =>
+    fetch(`/api/streaming${adds_left != null ? `?adds_left=${adds_left}` : ""}`).then((r) => json<Streaming>(r)),
+  setAddsUsed: (week: number, used: number | null) =>
+    fetch("/api/adds", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ week, used }),
+    }).then((r) => json<Adds>(r)),
   nbaStatus: () => fetch("/api/nba/status").then((r) => json<NbaStatus>(r)),
   nbaRefresh: () => fetch("/api/nba/refresh", { method: "POST" }).then((r) => json<Record<string, unknown>>(r)),
   setPlayerMap: (yahoo_id: number, nba_id: number | null) =>

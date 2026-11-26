@@ -69,6 +69,11 @@ def refresh() -> dict:
 
         logs = client.fetch_game_logs(season)
         players = client.fetch_players(season)
+        try:  # positions are a nice-to-have: don't fail the refresh without them
+            positions = {int(r["PERSON_ID"]): r.get("POSITION") or None for r in client.fetch_player_index(season)}
+        except Exception as e:
+            log.warning("NBA positions unavailable: %s", e)
+            positions = {}
         # The schedule file updates game status slowly; a result (W/L) in the box scores means it's over.
         finished = {g.id for g in games if g.status == 3} | {str(r["GAME_ID"]) for r in logs if r.get("WL")}
         for g in games:
@@ -84,7 +89,7 @@ def refresh() -> dict:
             for p in players:
                 pid = int(p["PERSON_ID"])
                 seen.add(pid)
-                db.add(NbaPlayer(id=pid, name=p["DISPLAY_FIRST_LAST"], team=p.get("TEAM_ABBREVIATION") or None))
+                db.add(NbaPlayer(id=pid, name=p["DISPLAY_FIRST_LAST"], team=p.get("TEAM_ABBREVIATION") or None, position=positions.get(pid)))
 
             db.execute(delete(GameLog))
             kept = 0
@@ -96,7 +101,7 @@ def refresh() -> dict:
                 pid = int(r["PLAYER_ID"])
                 if pid not in seen:  # played this season but no longer listed (waived etc.)
                     seen.add(pid)
-                    db.add(NbaPlayer(id=pid, name=r["PLAYER_NAME"], team=r.get("TEAM_ABBREVIATION")))
+                    db.add(NbaPlayer(id=pid, name=r["PLAYER_NAME"], team=r.get("TEAM_ABBREVIATION"), position=positions.get(pid)))
                 db.add(
                     GameLog(
                         player_id=pid,

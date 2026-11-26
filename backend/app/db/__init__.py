@@ -22,6 +22,17 @@ def init_db() -> None:
     from app.db import models  # noqa: F401  (registers tables)
 
     Base.metadata.create_all(engine)
+    _add_missing_columns()
+
+
+def _add_missing_columns() -> None:
+    """create_all() makes new tables but doesn't add new columns to existing ones: add them here."""
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            have = {row[1] for row in conn.execute(text(f'PRAGMA table_info("{table.name}")'))}
+            for col in table.columns:
+                if col.name not in have:
+                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col.type.compile(engine.dialect)}'))
 
 
 def db_ok() -> bool:

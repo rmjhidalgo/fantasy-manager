@@ -9,7 +9,21 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from app.db import SessionLocal
-from app.db.models import AppSetting, FantasyTeam, GameLog, League, NbaGame, NbaPlayer, Ownership, Player, PlayerMap, RosterSlot
+from app import yahoo_links
+from app.db.models import (
+    AppSetting,
+    FantasyTeam,
+    GameLog,
+    League,
+    NbaGame,
+    NbaPlayer,
+    OutlookHistory,
+    Ownership,
+    Player,
+    PlayerMap,
+    RosterSlot,
+)
+from app.engine.alerts import LONG_OUT
 from app.engine.lineup import INACTIVE_SLOTS, Candidate, active_slots, optimize_day
 from app.engine.projections import project_players
 from app.engine.schedule import Schedule, today_et
@@ -30,6 +44,20 @@ def _active_league(db) -> League:
 
 def _iso(dt) -> str | None:
     return dt.isoformat() + "Z" if dt else None
+
+
+def record_history(db, lg: League, team_id: int, o) -> None:
+    """Keep one win-chance point per new data state (new matchup page or NBA refresh)."""
+    refreshed = sync.refreshed_at()
+    key = f"{o.as_of.isoformat() if o.as_of else '-'}|{refreshed.isoformat() if refreshed else '-'}"
+    exists = db.scalar(select(OutlookHistory).where(
+        OutlookHistory.league_id == lg.id, OutlookHistory.week == o.week, OutlookHistory.team_id == team_id,
+        OutlookHistory.data_key == key))
+    if exists is None:
+        db.add(OutlookHistory(league_id=lg.id, week=o.week, team_id=team_id, data_key=key,
+                              computed_at=datetime.now(UTC).replace(tzinfo=None), win_prob=o.win_prob,
+                              my_final=o.me.final_expected, opp_final=o.opp.final_expected))
+        db.commit()
 
 
 # ------------------------------------------------------------------ NBA data
@@ -110,6 +138,8 @@ def outlook() -> dict:
             return {"matchup": None, "roster": []}
         teams = {t.team_id: t.name for t in db.scalars(select(FantasyTeam).where(FantasyTeam.league_id == lg.id))}
         o = matchup_outlook(db, lg, lg.my_team_id)
+        if o:
+            record_history(db, lg, lg.my_team_id, o)
         today = today_et()
         roster = db.scalars(select(RosterSlot).where(RosterSlot.league_id == lg.id, RosterSlot.team_id == lg.my_team_id)).all()
         proj = o.projections if o else project_players(db, lg, [r.player_id for r in roster], today)
@@ -226,10 +256,28 @@ def lineup(day: str | None = None) -> dict:
         order = {s: i for i, s in enumerate(slots)}
         rows.sort(key=lambda r: (r["best_slot"] is None, order.get(r["best_slot"] or "", 99), -r["expected"]))
         current_expected = sum(info[pid]["expected"] for pid, x in info.items() if x["current_slot"] not in INACTIVE_SLOTS and x["game"])
+
+        # IL moves: long-term injured players taking a regular spot, and healthy players stuck in an IL slot
+        il_slots = sum(1 for s in settings.get("roster_positions") or [] if s in ("IL", "IL+"))
+        il_used = sum(1 for r in roster if r.slot in ("IL", "IL+"))
+        il_moves = []
+        for r in roster:
+            p = proj.get(r.player_id)
+            if not p:
+                continue
+            if r.slot in ("IL", "IL+") and p.status not in LONG_OUT | {"D", "Q", "GTD", "P"}:
+                il_moves.append({"player_id": r.player_id, "name": p.name, "move": "activate",
+                                 "reason": "No injury tag any more: Yahoo blocks adds/drops until he leaves the IL slot."})
+            elif r.slot not in ("IL", "IL+") and p.status in LONG_OUT and il_used < il_slots:
+                il_moves.append({"player_id": r.player_id, "name": p.name, "move": "to IL",
+                                 "reason": f"Tagged {p.status}: an IL slot is free, which opens a roster spot for a pickup."})
+                il_used += 1
         return {
             "date": d.isoformat(),
             "slots": slots,
             "best_expected": round(best.expected, 1),
             "current_expected": round(current_expected, 1),
             "players": rows,
+            "il_moves": il_moves,
+            "yahoo_url": yahoo_links.team_url(lg.id, lg.my_team_id, d.isoformat()),
         }

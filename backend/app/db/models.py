@@ -146,6 +146,23 @@ class NbaPlayer(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)  # NBA personId
     name: Mapped[str] = mapped_column(String)
     team: Mapped[str | None] = mapped_column(String)
+    position: Mapped[str | None] = mapped_column(String)  # NBA.com position: G, F, C, G-F, F-C, ...
+
+
+class OutlookHistory(Base):
+    """Win chance over the week: one point each time new data (an import or NBA refresh) changes the outlook."""
+
+    __tablename__ = "outlook_history"
+    __table_args__ = (UniqueConstraint("league_id", "week", "team_id", "data_key"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    league_id: Mapped[int] = mapped_column(Integer)
+    week: Mapped[int] = mapped_column(Integer)
+    team_id: Mapped[int] = mapped_column(Integer)
+    data_key: Mapped[str] = mapped_column(String)  # matchup page time + NBA refresh time
+    computed_at: Mapped[datetime] = mapped_column(DateTime)
+    win_prob: Mapped[float] = mapped_column(Float)
+    my_final: Mapped[float] = mapped_column(Float)
+    opp_final: Mapped[float] = mapped_column(Float)
 
 
 class GameLog(Base):

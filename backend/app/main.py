@@ -9,6 +9,7 @@ from app import __version__, config
 from app.api.engine import router as engine_router
 from app.api.imports import router as imports_router
 from app.api.imports import start_saved_watcher
+from app.api.moves import router as moves_router
 from app.db import db_ok, init_db
 from app.importer import watcher
 from app.nba import sync
@@ -31,6 +32,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="Fantasy Manager", version=__version__, lifespan=lifespan)
 app.include_router(imports_router)
 app.include_router(engine_router)
+app.include_router(moves_router)
 
 
 @app.get("/api/health")

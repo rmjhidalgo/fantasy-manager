@@ -204,6 +204,7 @@ def test_sync_keeps_finished_games_only_and_matches_players(fresh_db, monkeypatc
     monkeypatch.setattr(client, "fetch_schedule", lambda: sched)
     monkeypatch.setattr(client, "fetch_game_logs", lambda season: logs)
     monkeypatch.setattr(client, "fetch_players", lambda season: players)
+    monkeypatch.setattr(client, "fetch_player_index", lambda season: [{"PERSON_ID": 1, "POSITION": "G-F"}])
     with SessionLocal() as db:
         db.add(Player(id=6014, name="Luka Doncic", nba_team="AAA", positions="PG,SG"))
         db.commit()
@@ -217,6 +218,21 @@ def test_sync_keeps_finished_games_only_and_matches_players(fresh_db, monkeypatc
         assert db.query(GameLog).count() == 1  # live game's partial line skipped
         assert db.get(PlayerMap, 6014).nba_id == 1
         assert db.get(NbaPlayer, 1).name == "Luka Dončić"
+        assert db.get(NbaPlayer, 1).position == "G-F"
+
+
+def test_sync_works_without_positions(fresh_db, monkeypatch):
+    def fail(season):
+        raise client.NbaDataError("down")
+
+    sched = {"seasonYear": "2026-27", "gameDates": []}
+    monkeypatch.setattr(client, "fetch_schedule", lambda: sched)
+    monkeypatch.setattr(client, "fetch_game_logs", lambda season: [])
+    monkeypatch.setattr(client, "fetch_players", lambda season: [{"PERSON_ID": 1, "DISPLAY_FIRST_LAST": "A B", "TEAM_ABBREVIATION": "AAA"}])
+    monkeypatch.setattr(client, "fetch_player_index", fail)
+    sync.refresh()
+    with SessionLocal() as db:
+        assert db.get(NbaPlayer, 1).position is None
 
 
 def test_manual_match_is_kept(fresh_db):

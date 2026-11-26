@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
-import { api, type LineupDay, type Outlook, type Overview } from "../api";
+import type { AlertItem, Outlook, Overview } from "../api";
+import AlertsCard from "../components/AlertsCard";
 import { formatWhen, hoursOld } from "../time";
+import { card, dayLabel } from "../ui";
+
+export type NavTarget = "matchup" | "lineup" | "streaming" | "import" | "free-agents";
 
 const FRESHNESS_LABELS: [keyof NonNullable<Overview["freshness"]>, string, number][] = [
   // key, label, hours after which it's shown as stale
@@ -12,22 +15,18 @@ const FRESHNESS_LABELS: [keyof NonNullable<Overview["freshness"]>, string, numbe
   ["settings", "Settings", 24 * 60],
 ];
 
-const card = "rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900";
-
-function dayLabel(iso: string): string {
-  const d = new Date(iso + "T12:00:00");
-  return d.toLocaleDateString([], { weekday: "short", month: "numeric", day: "numeric" });
-}
-
 export default function OverviewPage({
   data,
   outlook,
-  onGoImport,
+  alerts,
+  onNavigate,
 }: {
   data: Overview | null;
   outlook: Outlook | null;
-  onGoImport: () => void;
+  alerts: AlertItem[] | null;
+  onNavigate: (t: NavTarget) => void;
 }) {
+  const onGoImport = () => onNavigate("import");
   if (!data) return <p className="text-slate-500">Loading…</p>;
   if (!data.league) {
     return (
@@ -45,6 +44,10 @@ export default function OverviewPage({
 
   return (
     <div className="space-y-6">
+      <AlertsCard alerts={alerts} onAction={onNavigate} />
+
+      <MatchupCard data={data} outlook={outlook} onDetails={() => onNavigate("matchup")} />
+
       <section className={card}>
         <h2 className="mb-3 font-semibold">Data as of</h2>
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
@@ -64,10 +67,6 @@ export default function OverviewPage({
           })}
         </div>
       </section>
-
-      <MatchupCard data={data} outlook={outlook} />
-
-      <LineupCard outlook={outlook} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className={card}>
@@ -177,19 +176,24 @@ export default function OverviewPage({
   );
 }
 
-function MatchupCard({ data, outlook }: { data: Overview; outlook: Outlook | null }) {
+function MatchupCard({ data, outlook, onDetails }: { data: Overview; outlook: Outlook | null; onDetails: () => void }) {
   const m = data.matchup;
   const o = outlook?.matchup;
   if (!m) return null;
   const win = o ? Math.round(o.win_prob * 100) : null;
   return (
     <section className={card}>
-      <h2 className="mb-1 font-semibold">
-        Week {m.week} matchup{" "}
-        <span className="text-sm font-normal text-slate-500">
-          {m.start_date} – {m.end_date}
-        </span>
-      </h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-semibold">
+          Week {m.week} matchup{" "}
+          <span className="text-sm font-normal text-slate-500">
+            {m.start_date && dayLabel(m.start_date)} – {m.end_date && dayLabel(m.end_date)}
+          </span>
+        </h2>
+        <button onClick={onDetails} className="text-sm text-blue-700 hover:underline dark:text-blue-300">
+          Day by day →
+        </button>
+      </div>
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 py-3 text-center">
         <div>
           <div className="text-sm text-slate-500">{data.league!.my_team_name}</div>
@@ -203,8 +207,7 @@ function MatchupCard({ data, outlook }: { data: Overview; outlook: Outlook | nul
           {o && <div className="text-sm text-slate-500">→ projected {o.opp.final_expected.toFixed(0)}</div>}
         </div>
       </div>
-
-      {o && win !== null && (
+      {o && win !== null ? (
         <>
           <div className="mb-1 flex justify-between text-sm">
             <span className="font-medium">Chance to win: {win}%</span>
@@ -212,138 +215,14 @@ function MatchupCard({ data, outlook }: { data: Overview; outlook: Outlook | nul
               Games left: {o.me.games_left} vs {o.opp.games_left}
             </span>
           </div>
-          <div className="mb-3 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+          <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
             <div className="h-full bg-blue-600" style={{ width: `${win}%` }} />
           </div>
-          <table className="w-full text-sm">
-            <thead className="text-left text-slate-500">
-              <tr>
-                <th className="py-1 font-medium">Day</th>
-                <th className="py-1 text-right font-medium">You</th>
-                <th className="py-1 text-right font-medium">Opponent</th>
-              </tr>
-            </thead>
-            <tbody>
-              {o.me.days.map((d, i) => {
-                const od = o.opp.days[i];
-                return (
-                  <tr key={d.date} className="border-t border-slate-100 dark:border-slate-800">
-                    <td className="py-1">{dayLabel(d.date)}</td>
-                    <td className="py-1 text-right tabular-nums">
-                      {d.expected.toFixed(0)} <span className="text-xs text-slate-500">({d.starters} play)</span>
-                    </td>
-                    <td className="py-1 text-right tabular-nums">
-                      {od?.expected.toFixed(0)} <span className="text-xs text-slate-500">({od?.starters} play)</span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <p className="mt-2 text-xs text-slate-500">
-            Likely final range for you: {o.me.final_p10.toFixed(0)}–{o.me.final_p90.toFixed(0)}. Assumes both teams start their
-            best available players each day.
-          </p>
-          {o.notes.map((n, i) => (
-            <p key={i} className="mt-1 text-xs text-amber-700 dark:text-amber-400">
-              {n}
-            </p>
-          ))}
         </>
-      )}
-      {!o && <p className="text-center text-xs text-slate-500">Score as of {formatWhen(m.as_of)}. Projections appear once NBA data is downloaded.</p>}
-    </section>
-  );
-}
-
-function LineupCard({ outlook }: { outlook: Outlook | null }) {
-  const days = outlook?.matchup?.me.days.map((d) => d.date) ?? [];
-  const [day, setDay] = useState<string | null>(null);
-  const [data, setData] = useState<LineupDay | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const chosen = day ?? outlook?.today ?? null;
-
-  useEffect(() => {
-    if (!chosen) return;
-    api
-      .lineup(chosen)
-      .then((d) => {
-        setData(d);
-        setError(null);
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  }, [chosen, outlook]);
-
-  if (!outlook) return null;
-  const options = Array.from(new Set([outlook.today, ...days])).sort();
-  const changes = data?.players.filter((p) => p.change === "start" || p.change === "bench") ?? [];
-  const gain = data ? data.best_expected - data.current_expected : 0;
-
-  return (
-    <section className={card}>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-semibold">Best lineup</h2>
-        <select
-          value={chosen ?? ""}
-          onChange={(e) => setDay(e.target.value)}
-          className="rounded-md border border-slate-300 bg-transparent px-2 py-1 text-sm dark:border-slate-700"
-        >
-          {options.map((d) => (
-            <option key={d} value={d}>
-              {dayLabel(d)}
-              {d === outlook.today ? " (today, US time)" : ""}
-            </option>
-          ))}
-        </select>
-      </div>
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {data && (
-        <>
-          {changes.length > 0 && gain > 0.5 ? (
-            <div className="mb-3 rounded-md bg-amber-50 p-3 text-sm dark:bg-amber-950">
-              <b>Suggested changes (+{gain.toFixed(1)} expected pts):</b>{" "}
-              {changes.map((c) => `${c.change === "start" ? "Start" : "Bench"} ${c.name}`).join(", ")}
-              <div className="text-xs text-slate-500">Compared with the lineup on your last imported My Team page.</div>
-            </div>
-          ) : (
-            <p className="mb-3 text-sm text-green-700 dark:text-green-400">✓ Your imported lineup is already the best for this day.</p>
-          )}
-          <table className="w-full text-sm">
-            <thead className="text-left text-slate-500">
-              <tr>
-                <th className="py-1 pr-2 font-medium">Slot</th>
-                <th className="py-1 pr-2 font-medium">Player</th>
-                <th className="py-1 pr-2 font-medium">Game</th>
-                <th className="py-1 text-right font-medium">Exp.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.players.map((p) => (
-                <tr key={p.player_id} className={`border-t border-slate-100 dark:border-slate-800 ${p.best_slot ? "" : "text-slate-400"}`}>
-                  <td className="py-1 pr-2">{p.best_slot ?? "—"}</td>
-                  <td className="py-1 pr-2">
-                    {p.name}
-                    {p.status && <span className="ml-1 text-xs text-red-600 dark:text-red-400">{p.status}</span>}
-                    {p.change === "start" && <span className="ml-1 text-xs text-green-700 dark:text-green-400">start</span>}
-                    {p.change === "bench" && <span className="ml-1 text-xs text-amber-700 dark:text-amber-400">bench</span>}
-                  </td>
-                  <td className="py-1 pr-2 text-xs">
-                    {p.game ? p.game.opponent : "no game"}
-                    {p.game && !p.game.started && p.game.start_utc && (
-                      <span className="text-slate-500">
-                        {" "}
-                        {new Date(p.game.start_utc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                    )}
-                    {p.locked && <span className="text-slate-500"> · 🔒 started</span>}
-                  </td>
-                  <td className="py-1 text-right tabular-nums">{p.expected ? p.expected.toFixed(1) : "–"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
+      ) : (
+        <p className="text-center text-xs text-slate-500">Score as of {formatWhen(m.as_of)}. Projections appear once NBA data is downloaded.</p>
       )}
     </section>
   );
 }
+
