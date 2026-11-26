@@ -192,9 +192,50 @@ class TransactionRow:
 
 
 @dataclass
+class WeekMatchup:
+    week: int
+    team1: int
+    team2: int
+    score1: float | None
+    score2: float | None
+
+
+@dataclass
 class LeagueHomePage:
     standings: list[StandingRow]
     transactions: list[TransactionRow]
+    matchups: list[WeekMatchup] = field(default_factory=list)
+
+
+def _league_matchups(soup: BeautifulSoup, league_id: int) -> list[WeekMatchup]:
+    """This week's matchups box: 'View Matchup' links (week, mid1, mid2) with both teams' scores next to them.
+
+    Each row reads like "PokemonPinoys 3-2-0 | 5th 526.20 1327.21 vs 300.50 1305.94 ThorAlmighty ...":
+    current score then Yahoo's projection, for each side.
+    """
+    out: list[WeekMatchup] = []
+    seen: set[tuple[int, int, int]] = set()
+    for a in soup.find_all("a", href=re.compile(r"matchup\?.*week=\d+.*mid1=\d+.*mid2=\d+")):
+        q = dict(re.findall(r"(week|mid1|mid2)=(\d+)", a["href"]))
+        week, t1, t2 = int(q["week"]), int(q["mid1"]), int(q["mid2"])
+        if (week, t1, t2) in seen:
+            continue
+        # Smallest ancestor that holds links to both teams = this matchup's row
+        box = a.parent
+        while box is not None:
+            ids = {_team_id_from_href(x["href"], league_id) for x in box.find_all("a", href=True)}
+            if t1 in ids and t2 in ids:
+                break
+            box = box.parent
+        if box is None:
+            continue
+        text = _text(box)
+        left, _, right = text.partition(" vs ")
+        s1 = re.findall(r"\d+\.\d{2}", left)
+        s2 = re.findall(r"\d+\.\d{2}", right)
+        seen.add((week, t1, t2))
+        out.append(WeekMatchup(week, t1, t2, float(s1[0]) if s1 else None, float(s2[0]) if s2 else None))
+    return out
 
 
 def parse_league_home(html: str, league_id: int) -> LeagueHomePage:
@@ -253,7 +294,7 @@ def parse_league_home(html: str, league_id: int) -> LeagueHomePage:
             when = _text(who).replace(team_name or "", "", 1).strip() or None
             if desc:
                 txs.append(TransactionRow(team_name, when, desc))
-    return LeagueHomePage(rows, txs)
+    return LeagueHomePage(rows, txs, _league_matchups(soup, league_id))
 
 
 # ---------------------------------------------------------------- team roster

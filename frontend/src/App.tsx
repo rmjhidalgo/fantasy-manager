@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { notifyNew } from "./alerts";
-import { api, type AlertItem, type League, type Outlook, type Overview } from "./api";
+import { maybeNotifySummary, notifyNew } from "./alerts";
+import { api, type AlertItem, type DailySummary, type League, type Outlook, type Overview } from "./api";
 import FreeAgentsPage from "./pages/FreeAgentsPage";
 import ImportPage from "./pages/ImportPage";
 import LineupPage from "./pages/LineupPage";
@@ -41,6 +41,7 @@ export default function App() {
   const [backendDown, setBackendDown] = useState(false);
   const [version, setVersion] = useState(0); // bumps when data changes, so pages reload
   const [askClaude, setAskClaude] = useState(false);
+  const [summary, setSummary] = useState<DailySummary | null>(null);
 
   const loadAssistant = useCallback(() => {
     api
@@ -74,6 +75,10 @@ export default function App() {
       .then(setOutlook)
       .catch(() => setOutlook(null)); // no league yet, or no NBA data yet
     loadAlerts();
+    api
+      .summary()
+      .then(setSummary)
+      .catch(() => setSummary(null));
     setVersion((v) => v + 1);
   }, [loadAlerts]);
 
@@ -84,7 +89,13 @@ export default function App() {
       .then(setHealth)
       .catch(() => setBackendDown(true));
     const t = setInterval(loadAlerts, ALERTS_EVERY_MS);
-    return () => clearInterval(t);
+    // Daily summary notification, once a day at the chosen time (while the app is open)
+    const s = setInterval(() => maybeNotifySummary(() => setTab("overview")), 60 * 1000);
+    maybeNotifySummary(() => setTab("overview"));
+    return () => {
+      clearInterval(t);
+      clearInterval(s);
+    };
   }, [refresh, loadAlerts]);
 
   const active = leagues.find((l) => l.active);
@@ -147,7 +158,7 @@ export default function App() {
             Can't reach the backend. Make sure it's running (start.bat starts both parts).
           </p>
         )}
-        {tab === "overview" && <OverviewPage data={overview} outlook={outlook} alerts={alerts} onNavigate={setTab} />}
+        {tab === "overview" && <OverviewPage data={overview} outlook={outlook} alerts={alerts} summary={summary} onNavigate={setTab} />}
         {tab === "suggest" && <SuggestPage key={version} outlook={outlook} />}
         {tab === "matchup" && <MatchupPage version={version} />}
         {tab === "lineup" && <LineupPage outlook={outlook} />}

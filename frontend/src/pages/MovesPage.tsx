@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type MoveLogData } from "../api";
 import { formatWhen } from "../time";
-import { card, errText, Loading, YahooLink } from "../ui";
+import { card, errText, Loading, Notice, YahooLink } from "../ui";
 
 const STATUS: Record<MoveLogData["moves"][number]["status"], [string, string]> = {
   open: ["Waiting for an import", "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"],
@@ -37,6 +37,15 @@ export default function MovesPage() {
           Moves you opened on Yahoo from Suggested moves, Free agents or Streaming. Your next saved Team or League page shows whether
           each one happened.
         </p>
+        {data.performance.moves_counted > 0 && (
+          <div className="mb-3">
+            <Notice tone={data.performance.total_net >= 0 ? "ok" : "warn"}>
+              Moves you made: the players you added have scored <b>{data.performance.total_net >= 0 ? "+" : ""}
+              {data.performance.total_net.toFixed(1)} FP</b> more than the players you dropped, since each move (
+              {data.performance.moves_counted} move{data.performance.moves_counted !== 1 && "s"}; all their games, lineup or not).
+            </Notice>
+          </div>
+        )}
         {data.moves.length === 0 ? (
           <p className="text-sm text-slate-500">Nothing yet: click "Add on Yahoo" on a suggestion and it appears here.</p>
         ) : (
@@ -75,6 +84,13 @@ export default function MovesPage() {
                       <td className="py-1.5 pr-2">
                         <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${tone}`}>{label}</span>
                         {m.note && <div className="text-xs text-slate-500">{m.note}</div>}
+                        {m.result && (
+                          <div className={`text-xs ${m.result.net >= 0 ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
+                            Since: {m.result.added_fp.toFixed(0)} FP ({m.result.added_games} g) vs {m.result.dropped_fp.toFixed(0)} FP (
+                            {m.result.dropped_games} g) → {m.result.net >= 0 ? "+" : ""}
+                            {m.result.net.toFixed(1)}
+                          </div>
+                        )}
                       </td>
                       <td className="py-1.5 text-right text-xs">
                         {m.status === "open" && (

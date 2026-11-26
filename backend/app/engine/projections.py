@@ -87,9 +87,25 @@ class Projection:
         return self.play_prob * (BACK_TO_BACK_FACTOR if b2b else 1.0)
 
 
-def _blend(values_by_window: list[list[float]]) -> float | None:
+def load_windows(db: Session) -> list[tuple[int | None, float, int]]:
+    """The window weights in use: tuned ones (Settings → Projection tuning) or the defaults."""
+    import json
+
+    from app.db.models import AppSetting
+
+    row = db.get(AppSetting, "projection_weights")
+    try:
+        w = json.loads(row.value) if row and row.value else None
+    except ValueError:
+        w = None
+    if not w or len(w) != len(WINDOWS):
+        return WINDOWS
+    return [(days, float(x), full) for (days, _, full), x in zip(WINDOWS, w, strict=True)]
+
+
+def _blend(values_by_window: list[list[float]], windows: list[tuple[int | None, float, int]] = WINDOWS) -> float | None:
     num = den = 0.0
-    for (_, weight, full), vals in zip(WINDOWS, values_by_window, strict=True):
+    for (_, weight, full), vals in zip(windows, values_by_window, strict=True):
         if not vals:
             continue
         w = weight * min(1.0, len(vals) / full)
@@ -104,6 +120,7 @@ class _Context:
     def __init__(self, db: Session, league: League, nba_ids: list[int], today: date):
         self.today = today
         self.weights, _ = league_weights(league)
+        self.windows = load_windows(db)
         self.logs: dict[int, list[GameLog]] = defaultdict(list)
         for g in db.scalars(select(GameLog).where(GameLog.player_id.in_(nba_ids), GameLog.date_et < today.isoformat())):
             self.logs[g.player_id].append(g)
@@ -141,12 +158,12 @@ class _Context:
         if logs:
             fp = [fantasy_points(g, self.weights) for g in logs]
             per_window, window_fp = [], {}
-            for days, _, _ in WINDOWS:
+            for days, _, _ in self.windows:
                 cutoff = (self.today - timedelta(days=days)).isoformat() if days else ""
                 vals = [v for v, g in zip(fp, logs, strict=True) if g.date_et >= cutoff]
                 per_window.append(vals)
                 window_fp[f"L{days}" if days else "S"] = round(statistics.fmean(vals), 1) if vals else None
-            mean = _blend(per_window) or 0.0
+            mean = _blend(per_window, self.windows) or 0.0
             recent = fp[-15:]
             sd = statistics.pstdev(recent) if len(recent) >= 3 else 0.35 * mean
             cutoff14 = (self.today - timedelta(days=14)).isoformat()

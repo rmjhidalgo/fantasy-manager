@@ -21,7 +21,7 @@ from app.db.models import (
 )
 from app.importer import watcher
 from app.importer.detect import PAGE_LABELS
-from app.importer.service import import_bytes
+from app.importer.service import import_bytes, reprocess_all
 
 router = APIRouter(prefix="/api")
 
@@ -67,6 +67,14 @@ async def import_files(
             fallback = datetime.fromtimestamp(last_modified[i] / 1000, UTC).replace(tzinfo=None)
         results.append(import_bytes(data, name, source="upload", fallback_saved_at=fallback).to_dict())
     return {"results": results}
+
+
+@router.post("/imports/reprocess")
+async def reprocess() -> dict:
+    """Read all saved pages again (after an app update taught it to read more from them)."""
+    from fastapi.concurrency import run_in_threadpool
+
+    return await run_in_threadpool(reprocess_all)
 
 
 @router.get("/imports")

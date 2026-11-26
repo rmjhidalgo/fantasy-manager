@@ -76,6 +76,15 @@ def test_league_home_standings_and_transactions():
     assert home.transactions and home.transactions[0].team_name
 
 
+def test_league_home_lists_all_matchups_of_the_week():
+    page, _ = load("Engineering Fantasy League _ Fantasy")
+    home = P.parse_league_home(page.html, 70793)
+    assert len(home.matchups) == 6 and {m.week for m in home.matchups} == {6}
+    mine = next(m for m in home.matchups if 5 in (m.team1, m.team2))
+    assert (mine.team1, mine.team2, mine.score1, mine.score2) == (5, 3, 526.2, 300.5)
+    assert sorted(t for m in home.matchups for t in (m.team1, m.team2)) == list(range(1, 13))
+
+
 def test_team_page_roster():
     page, kind = load("PokemonPinoys")
     assert (kind.page_type, kind.team_id) == ("team", 5)

@@ -66,13 +66,22 @@ class MatchupOutlook:
     projections: dict[int, Projection]
     notes: list[str]
     sim_stats: dict[str, tuple[float, float]] = field(default_factory=dict)  # side -> (mean, variance) of final score
+    sims: dict[str, np.ndarray] = field(default_factory=dict, repr=False)  # side -> simulated final scores
 
 
 def _roster(db: Session, league_id: int, team_id: int) -> dict[int, RosterSlot]:
-    return {
+    rows = {
         r.player_id: r
         for r in db.scalars(select(RosterSlot).where(RosterSlot.league_id == league_id, RosterSlot.team_id == team_id))
     }
+    if rows:
+        return rows
+    # No roster page saved for this team: use its players from the Taken lists (slots unknown -> optimizer every day)
+    from app.engine.rosters import team_rosters
+
+    league = db.get(League, league_id)
+    ids = team_rosters(db, league)[0].get(team_id, set()) if league else set()
+    return {pid: RosterSlot(league_id=league_id, team_id=team_id, player_id=pid, slot="BN") for pid in ids}
 
 
 def plan_days(
@@ -244,4 +253,5 @@ def matchup_outlook(db: Session, league: League, team_id: int, now_utc: datetime
         projections=proj,
         notes=notes,
         sim_stats={"me": (float(my_sim.mean()), float(my_sim.var())), "opp": (float(opp_sim.mean()), float(opp_sim.var()))},
+        sims={"me": my_sim, "opp": opp_sim},
     )

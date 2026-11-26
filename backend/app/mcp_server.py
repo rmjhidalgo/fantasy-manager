@@ -350,6 +350,26 @@ def get_scoring_profile() -> dict:
     }
 
 
+@mcp.tool(annotations=READ_ONLY)
+def get_playoff_odds() -> dict:
+    """Each team's chance to make the playoffs, projected seed and wins (rest of the regular season simulated 5,000 times),
+    plus the user's chance if they win vs lose this week."""
+    d = _get("/api/playoff-odds")
+    return {
+        "playoff_spots": d.get("playoff_spots"), "weeks_left": d.get("weeks_left"),
+        "teams": [{"team": t["name"], "record": t["record"], "playoff_chance": t["playoff_odds"], "avg_seed": t["avg_seed"],
+                   "projected_wins": t["proj_wins"], "is_me": t["is_me"]} for t in d.get("teams", [])],
+        "what_if_this_week": d.get("what_if"), "notes": d.get("notes", []),
+    }
+
+
+@mcp.tool(annotations=READ_ONLY)
+def get_daily_summary() -> dict:
+    """Today's summary: pages to re-save, lineup fixes, injuries, best moves, this week's matchup and playoff chances."""
+    d = _get("/api/summary")
+    return {"generated_at": d["generated_at"], "items": [{"title": i["title"], "detail": i["detail"]} for i in d["items"]]}
+
+
 def main() -> None:
     mcp.run("stdio")
 

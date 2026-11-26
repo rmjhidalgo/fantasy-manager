@@ -1,7 +1,160 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type AssistantStatus } from "../api";
+import { api, type AssistantStatus, type Horizon, type SummarySettings, type Tuning } from "../api";
 import { formatWhen, hoursOld } from "../time";
-import { btn, card, errText, Loading, Notice } from "../ui";
+import { btn, card, errText, Loading, Notice, select } from "../ui";
+
+function SummarySettingsCard() {
+  const [s, setS] = useState<SummarySettings | null>(null);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    api
+      .summarySettings()
+      .then(setS)
+      .catch(() => {});
+  }, []);
+  if (!s) return null;
+  const save = (next: SummarySettings) => {
+    setS(next);
+    api
+      .setSummarySettings(next)
+      .then((r) => {
+        setS(r);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 1500);
+      })
+      .catch(() => {});
+  };
+  return (
+    <section className={card}>
+      <h2 className="mb-1 font-semibold">Daily summary</h2>
+      <p className="mb-3 text-sm text-slate-500">
+        A short summary at the top of Overview: pages to re-save, lineup fixes, injuries, best moves, matchup and playoff chances.
+        At your chosen time each day you also get a desktop notification, while the app is open in a browser tab (turn on
+        notifications on the Alerts card).
+      </p>
+      <div className="flex flex-wrap items-center gap-4 text-sm">
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={s.enabled} onChange={(e) => save({ ...s, enabled: e.target.checked })} /> Notify me daily at
+        </label>
+        <input
+          type="time"
+          value={s.time}
+          onChange={(e) => e.target.value && save({ ...s, time: e.target.value })}
+          className="rounded-md border border-slate-300 bg-transparent px-2 py-1 dark:border-slate-700"
+        />
+        <label className="flex items-center gap-2">
+          <span className="text-slate-500">Moves for</span>
+          <select value={s.horizon} onChange={(e) => save({ ...s, horizon: e.target.value as Horizon })} className={select}>
+            <option value="A">A · this week</option>
+            <option value="B">B · next week</option>
+            <option value="C">C · next 5 weeks</option>
+            <option value="D">D · playoffs</option>
+          </select>
+        </label>
+        {saved && <span className="text-green-700 dark:text-green-400">Saved</span>}
+      </div>
+    </section>
+  );
+}
+
+function TuningCard({ onChange }: { onChange: () => void }) {
+  const [t, setT] = useState<Tuning | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = () => {
+    setBusy(true);
+    setError(null);
+    api
+      .tuning()
+      .then(setT)
+      .catch((e) => setError(errText(e)))
+      .finally(() => setBusy(false));
+  };
+  const apply = (w: number[] | null) => {
+    setBusy(true);
+    api
+      .setTuning(w)
+      .then(() => {
+        onChange();
+        run();
+      })
+      .catch((e) => {
+        setError(errText(e));
+        setBusy(false);
+      });
+  };
+  const same = (a: number[], b: number[]) => a.length === b.length && a.every((x, i) => Math.abs(x - b[i]) < 1e-9);
+  return (
+    <section className={card}>
+      <h2 className="mb-1 font-semibold">Projection tuning</h2>
+      <p className="mb-3 text-sm text-slate-500">
+        Learns from real results: for every game in the last 3 weeks, it projects each player the way the app would have the day
+        before, and checks which mix of recent and season-long form missed least.
+      </p>
+      <button className={btn} disabled={busy} onClick={run}>
+        {busy ? "Testing…" : t ? "Test again" : "Test projection mixes"}
+      </button>
+      {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {t && (
+        <div className="mt-3 space-y-2">
+          <table className="w-full text-sm">
+            <thead className="text-left text-slate-500">
+              <tr>
+                <th className="py-1 pr-2 font-medium">Mix</th>
+                {t.windows.map((w) => (
+                  <th key={w} className="py-1 pr-2 text-right font-medium">
+                    {w}
+                  </th>
+                ))}
+                <th className="py-1 pr-2 text-right font-medium">Avg. miss</th>
+                <th className="py-1 font-medium"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {t.results.map((r, i) => {
+                const inUse = same(r.weights, t.current);
+                return (
+                  <tr key={r.name} className={`border-t border-slate-100 dark:border-slate-800 ${inUse ? "font-medium" : ""}`}>
+                    <td className="py-1 pr-2">
+                      {r.name}
+                      {i === 0 && <span className="ml-1 text-xs text-green-700 dark:text-green-400">best</span>}
+                    </td>
+                    {r.weights.map((w, k) => (
+                      <td key={k} className="py-1 pr-2 text-right tabular-nums text-slate-500">
+                        {Math.round(w * 100)}%
+                      </td>
+                    ))}
+                    <td className="py-1 pr-2 text-right tabular-nums">{r.mae?.toFixed(2) ?? "–"} FP</td>
+                    <td className="py-1 text-right text-xs">
+                      {inUse ? (
+                        <span className="text-slate-500">in use</span>
+                      ) : (
+                        <button className="text-blue-700 hover:underline dark:text-blue-300" disabled={busy} onClick={() => apply(r.weights)}>
+                          Use
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="text-sm">
+            {t.recommend && t.best
+              ? `"${t.best.name}" would have missed less: consider using it.`
+              : "The mix in use is as good as the alternatives (within 1%): no change needed."}{" "}
+            <span className="text-slate-500">Tested on {t.games_tested.toLocaleString()} games.</span>
+          </p>
+          {!same(t.current, [0.15, 0.25, 0.3, 0.3]) && (
+            <button className="text-sm text-slate-500 hover:underline" disabled={busy} onClick={() => apply(null)}>
+              Back to the standard mix
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
 
 function CopyBox({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -70,6 +223,8 @@ export default function SettingsPage({ onChange }: { onChange: () => void }) {
 
   return (
     <div className="space-y-6">
+      <SummarySettingsCard />
+      <TuningCard onChange={onChange} />
       <section className={card}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-semibold">AI assistant (optional)</h2>

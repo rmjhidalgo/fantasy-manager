@@ -1,5 +1,6 @@
-import type { AlertItem, Outlook, Overview } from "../api";
+import type { AlertItem, DailySummary, Outlook, Overview } from "../api";
 import AlertsCard from "../components/AlertsCard";
+import SummaryCard from "../components/SummaryCard";
 import { formatWhen, hoursOld } from "../time";
 import { card, dayLabel } from "../ui";
 
@@ -19,11 +20,13 @@ export default function OverviewPage({
   data,
   outlook,
   alerts,
+  summary,
   onNavigate,
 }: {
   data: Overview | null;
   outlook: Outlook | null;
   alerts: AlertItem[] | null;
+  summary: DailySummary | null;
   onNavigate: (t: NavTarget) => void;
 }) {
   const onGoImport = () => onNavigate("import");
@@ -44,6 +47,8 @@ export default function OverviewPage({
 
   return (
     <div className="space-y-6">
+      <SummaryCard summary={summary} onAction={(a) => onNavigate(a as NavTarget)} />
+
       <AlertsCard alerts={alerts} onAction={onNavigate} />
 
       <MatchupCard data={data} outlook={outlook} onDetails={() => onNavigate("matchup")} />

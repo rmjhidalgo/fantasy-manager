@@ -11,6 +11,7 @@ from app.api.assistant import router as assistant_router
 from app.api.engine import router as engine_router
 from app.api.imports import router as imports_router
 from app.api.imports import start_saved_watcher
+from app.api.insights import router as insights_router
 from app.api.moves import router as moves_router
 from app.api.strategy import router as strategy_router
 from app.db import db_ok, init_db
@@ -52,6 +53,7 @@ app.include_router(assistant_router)
 app.include_router(engine_router)
 app.include_router(moves_router)
 app.include_router(strategy_router)
+app.include_router(insights_router)
 
 
 @app.get("/api/health")

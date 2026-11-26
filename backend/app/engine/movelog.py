@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import FantasyTeam, League, MoveLog, Ownership, Player, RosterSlot, Transaction
 from app.engine.adds import parse_moves, transaction_time, yahoo_zone
+from app.engine.schedule import today_et
 from app.nba.matching import norm_name
 
 NOT_DONE_AFTER = timedelta(days=1)
@@ -84,6 +85,40 @@ def resolve(db: Session, league: League, team_id: int, now: datetime | None = No
             m.status, m.resolved_at = "not done", now
             m.note = "Not on your roster saved since"
     db.commit()
+
+
+def performance(db: Session, league: League, moves: list[MoveLog]) -> dict:
+    """For moves that happened: fantasy points the added player has scored since, vs the player dropped."""
+    from app.db.models import GameLog, PlayerMap
+    from app.engine.scoring import fantasy_points, league_weights
+
+    weights, _ = league_weights(league)
+    out: dict[int, dict] = {}
+    total = 0.0
+    for m in moves:
+        if m.status != "done":
+            continue
+        since = today_et(m.created_at).isoformat()
+
+        def fp_since(yahoo_id: int | None, nba_id: int | None) -> tuple[float, int] | None:
+            nid = nba_id
+            if nid is None and yahoo_id:
+                pm = db.get(PlayerMap, yahoo_id)
+                nid = pm.nba_id if pm else None
+            if nid is None:
+                return None
+            games = db.scalars(select(GameLog).where(GameLog.player_id == nid, GameLog.date_et >= since)).all()
+            return sum(fantasy_points(g, weights) for g in games), len(games)
+
+        added = fp_since(m.add_yahoo_id, m.add_nba_id)
+        dropped = fp_since(m.drop_yahoo_id, None) if m.drop_yahoo_id else (0.0, 0)
+        if added is None or dropped is None:
+            continue
+        net = added[0] - dropped[0]
+        total += net
+        out[m.id] = {"added_fp": round(added[0], 1), "added_games": added[1], "dropped_fp": round(dropped[0], 1),
+                     "dropped_games": dropped[1], "net": round(net, 1)}
+    return {"by_move": out, "total_net": round(total, 1), "moves_counted": len(out)}
 
 
 def my_transactions(db: Session, league: League, team_id: int) -> list[dict]:

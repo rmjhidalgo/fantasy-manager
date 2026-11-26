@@ -222,7 +222,23 @@ def _store_league_home(db, league: League, kind, html, saved_at, result) -> None
         if not exists:
             db.add(Transaction(league_id=league.id, team_name=tx.team_name, when_text=tx.when_text, description=tx.description, as_of=saved_at))
             new_tx += 1
-    result.summary = f"Standings for {len(page.standings)} teams, {new_tx} new transactions."
+    # This week's matchups (all teams): pairings and live scores
+    for mu in page.matchups:
+        for me, opp, s, o in ((mu.team1, mu.team2, mu.score1, mu.score2), (mu.team2, mu.team1, mu.score2, mu.score1)):
+            m = db.get(Matchup, (league.id, mu.week, me))
+            if m is not None and not _newer(saved_at, m.as_of):
+                continue
+            if m is None:
+                # Dates: take them from any matchup of the same week (Matchup pages have them)
+                same_week = db.scalar(select(Matchup).where(Matchup.league_id == league.id, Matchup.week == mu.week,
+                                                            Matchup.start_date.is_not(None)).limit(1))
+                m = Matchup(league_id=league.id, week=mu.week, team_id=me,
+                            start_date=same_week.start_date if same_week else None, end_date=same_week.end_date if same_week else None)
+            m.opp_team_id, m.score, m.opp_score, m.as_of = opp, s, o, saved_at
+            db.add(m)
+    db.flush()
+    result.summary = f"Standings for {len(page.standings)} teams, {new_tx} new transactions" + (
+        f", {len(page.matchups)} matchups of week {page.matchups[0].week}." if page.matchups else ".")
 
 
 def _upsert_player(db: Session, ref: P.PlayerRef, saved_at: datetime, full_name: bool = True) -> None:
@@ -338,6 +354,38 @@ def _store_players(db, league: League, kind, html, saved_at, result) -> None:
     result.summary = f"{len(page.rows)} players ({', '.join(p for p in parts if p)}), stats: {window}."
     if skipped:
         result.warnings.append(f"{skipped} players already had newer stats; kept those.")
+
+
+# ------------------------------------------------------------------ re-read saved pages
+
+def reprocess_all() -> dict:
+    """Read every page already imported again (oldest first), e.g. after the app learned to read more from them.
+    The freshness rule still applies, so the newest data wins as before."""
+    with _lock, SessionLocal() as db:
+        records = db.scalars(select(ImportRecord).where(ImportRecord.status.in_(("imported", "partial")),
+                                                        ImportRecord.stored_path.is_not(None))
+                             .order_by(ImportRecord.saved_at)).all()
+        done = errors = 0
+        seen: set[str] = set()
+        for rec in records:
+            if rec.sha256 in seen:
+                continue
+            seen.add(rec.sha256)
+            path = Path(rec.stored_path)
+            if not path.is_file():
+                continue
+            try:
+                page = read_page(path.read_bytes(), rec.filename, rec.saved_at)
+                kind = detect(page.url)
+                if kind is None:
+                    continue
+                _store(db, kind, page.html, page.saved_at or rec.saved_at or _now(), ImportResult(rec.filename, "imported"))
+                db.commit()
+                done += 1
+            except (P.ParseError, NotAWebPage):
+                db.rollback()
+                errors += 1
+        return {"pages": done, "errors": errors}
 
 
 # ------------------------------------------------------------------ file helper

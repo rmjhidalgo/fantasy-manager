@@ -270,7 +270,9 @@ export type MoveLogInput = {
 };
 
 export type MoveLogData = {
+  performance: { total_net: number; moves_counted: number };
   moves: {
+    result: { added_fp: number; added_games: number; dropped_fp: number; dropped_games: number; net: number } | null;
     id: number;
     created_at: string;
     source: string;
@@ -392,6 +394,44 @@ export type ScoringProfile = {
   league_average: Record<string, number>;
   my_rank: Record<string, number>;
   note?: string;
+};
+
+export type PlayoffOdds = {
+  week?: number;
+  weeks_left?: number;
+  playoff_spots?: number;
+  first_playoff_week?: number;
+  seasons?: number;
+  teams: {
+    team_id: number;
+    name: string | null;
+    is_me: boolean;
+    record: string;
+    playoff_odds: number;
+    avg_seed: number;
+    proj_wins: number;
+    seed_chances: number[];
+  }[];
+  what_if?: { win_this_week: number | null; lose_this_week: number | null; chance_to_win_this_week: number } | null;
+  notes: string[];
+};
+
+export type SummarySettings = { enabled: boolean; time: string; horizon: Horizon };
+
+export type DailySummary = {
+  generated_at: string;
+  settings: SummarySettings;
+  items: { kind: string; title: string; detail: string; action: string | null; level: "info" | "warn" | "danger" }[];
+};
+
+export type Tuning = {
+  days: number;
+  games_tested: number;
+  results: { name: string; weights: number[]; mae: number | null; games: number }[];
+  current: number[];
+  best: { name: string; weights: number[]; mae: number } | null;
+  recommend: boolean;
+  windows: string[];
 };
 
 export type Horizon = "A" | "B" | "C" | "D";
@@ -526,6 +566,23 @@ export const api = {
   },
   outlook: () => fetch("/api/outlook").then((r) => json<Outlook>(r)),
   lineup: (day?: string) => fetch(`/api/lineup${day ? `?day=${day}` : ""}`).then((r) => json<LineupDay>(r)),
+  playoffOdds: () => fetch("/api/playoff-odds").then((r) => json<PlayoffOdds>(r)),
+  summary: () => fetch("/api/summary").then((r) => json<DailySummary>(r)),
+  summarySettings: () => fetch("/api/summary/settings").then((r) => json<SummarySettings>(r)),
+  setSummarySettings: (s: SummarySettings) =>
+    fetch("/api/summary/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(s),
+    }).then((r) => json<SummarySettings>(r)),
+  tuning: () => fetch("/api/tuning").then((r) => json<Tuning>(r)),
+  setTuning: (weights: number[] | null) =>
+    fetch("/api/tuning", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weights }),
+    }).then((r) => json<{ weights: number[] }>(r)),
+  reprocess: () => fetch("/api/imports/reprocess", { method: "POST" }).then((r) => json<{ pages: number; errors: number }>(r)),
   teams: () => fetch("/api/teams").then((r) => json<{ teams: TeamRoster[] }>(r)),
   analyzeTrade: (other_team: number, give: number[], get: number[], horizon: Horizon) =>
     fetch("/api/trade/analyze", {

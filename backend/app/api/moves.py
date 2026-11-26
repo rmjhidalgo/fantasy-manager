@@ -10,7 +10,7 @@ from app import yahoo_links
 from app.api.engine import _active_league, _iso, record_history
 from app.db import SessionLocal
 from app.db.models import FantasyTeam, MoveLog, OutlookHistory
-from app.engine.movelog import log_move, my_transactions, resolve
+from app.engine.movelog import log_move, my_transactions, performance, resolve
 from app.engine.adds import adds_used, set_adds_used
 from app.engine.alerts import build_alerts
 from app.engine.freeagents import current_week, rank_free_agents
@@ -142,12 +142,14 @@ def get_move_log() -> dict:
         resolve(db, lg, team_id)
         rows = db.scalars(select(MoveLog).where(MoveLog.league_id == lg.id, MoveLog.team_id == team_id)
                           .order_by(MoveLog.created_at.desc()).limit(100)).all()
+        perf = performance(db, lg, list(rows))
         return {
+            "performance": {"total_net": perf["total_net"], "moves_counted": perf["moves_counted"]},
             "moves": [
                 {
                     "id": m.id, "created_at": _iso(m.created_at), "source": m.source, "horizon": m.horizon,
                     "add_name": m.add_name, "drop_name": m.drop_name, "gain": m.gain, "status": m.status,
-                    "resolved_at": _iso(m.resolved_at), "note": m.note,
+                    "resolved_at": _iso(m.resolved_at), "note": m.note, "result": perf["by_move"].get(m.id),
                     "yahoo_url": yahoo_links.player_url(lg.id, m.add_yahoo_id, m.add_name),
                 }
                 for m in rows

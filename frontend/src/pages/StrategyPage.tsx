@@ -1,11 +1,13 @@
 import { useState } from "react";
 import ComparePanel from "./strategy/ComparePanel";
+import OddsPanel from "./strategy/OddsPanel";
 import ProfilePanel from "./strategy/ProfilePanel";
 import SchedulePanel from "./strategy/SchedulePanel";
 import ScoutingPanel from "./strategy/ScoutingPanel";
 import TradesPanel from "./strategy/TradesPanel";
 
 const SUBTABS = [
+  ["odds", "Playoff odds"],
   ["trades", "Trades"],
   ["schedule", "Schedule grid"],
   ["compare", "Compare players"],
@@ -16,7 +18,7 @@ const SUBTABS = [
 type Sub = (typeof SUBTABS)[number][0];
 
 export default function StrategyPage() {
-  const [sub, setSub] = useState<Sub>("trades");
+  const [sub, setSub] = useState<Sub>("odds");
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-800">
@@ -34,6 +36,7 @@ export default function StrategyPage() {
           </button>
         ))}
       </div>
+      {sub === "odds" && <OddsPanel />}
       {sub === "trades" && <TradesPanel />}
       {sub === "schedule" && <SchedulePanel />}
       {sub === "compare" && <ComparePanel />}
