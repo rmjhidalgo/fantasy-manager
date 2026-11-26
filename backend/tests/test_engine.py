@@ -247,3 +247,21 @@ def test_manual_match_is_kept(fresh_db):
     match_all()
     with SessionLocal() as db:
         assert db.get(PlayerMap, 50).nba_id == 2  # automatic matching doesn't override manual choices
+
+
+def test_players_from_a_new_page_are_matched_at_once(fresh_db):
+    """Players first seen on a page saved after the last NBA download get their NBA stats straight away."""
+    from conftest import fixture
+
+    from sqlalchemy import select
+
+    from app.importer.service import import_path
+
+    with SessionLocal() as db:
+        db.add(NbaPlayer(id=1630000, name="Jalen Williams", team="OKC"))
+        db.add(NbaPlayer(id=1630001, name="Grayson Allen", team="PHX"))
+        db.commit()
+    import_path(fixture("Player List _ Fantasy"))
+    with SessionLocal() as db:
+        maps = {m.nba_id: m.method for m in db.scalars(select(PlayerMap))}
+    assert maps == {1630000: "auto", 1630001: "auto"}

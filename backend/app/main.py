@@ -18,6 +18,7 @@ from app.api.strategy import router as strategy_router
 from app.db import db_ok, init_db
 from app.importer import watcher
 from app.nba import sync
+from app.nba.matching import match_new
 
 # Set FM_NO_BACKGROUND=1 (tests) to skip folder watching and NBA downloads on startup.
 BACKGROUND = os.environ.get("FM_NO_BACKGROUND") != "1"
@@ -27,6 +28,10 @@ BACKGROUND = os.environ.get("FM_NO_BACKGROUND") != "1"
 async def lifespan(_app: FastAPI):
     init_db()
     if BACKGROUND:
+        try:  # players left unmatched, e.g. the app was closed during an NBA download
+            match_new()
+        except Exception:
+            pass
         start_saved_watcher()
         sync.start_background()  # downloads NBA data now if it's older than 3 hours, then keeps it fresh
         maintenance.start_background()  # daily database backup

@@ -7,6 +7,7 @@ importing an old file never replaces newer information.
 """
 
 import hashlib
+import logging
 import json
 import threading
 from dataclasses import asdict, dataclass, field
@@ -34,6 +35,8 @@ from app.db.models import (
 from app.importer import parsers as P
 from app.importer.detect import PAGE_LABELS, PageKind, detect
 from app.importer.source import NotAWebPage, read_page
+
+log = logging.getLogger(__name__)
 
 _lock = threading.Lock()  # one import at a time (uploads and folder watch share the DB)
 
@@ -116,7 +119,18 @@ def import_bytes(
         stored = _keep_copy(data, sha, filename)
         _ensure_active_league(db, kind.league_id)
         db.commit()
+        _match_new_players()
         return _record(db, sha, filename, source, page, kind, result, stored)
+
+
+def _match_new_players() -> None:
+    """Link players seen for the first time to their NBA stats now, instead of at the next NBA download."""
+    from app.nba.matching import match_new
+
+    try:
+        match_new()
+    except Exception as e:  # never fail an import over this; the next NBA download retries
+        log.warning("Matching new players failed: %s", e)
 
 
 def _record(db: Session, sha, filename, source, page, kind: PageKind | None, result: ImportResult, stored: Path | None = None) -> ImportResult:
@@ -418,6 +432,7 @@ def reprocess_all() -> dict:
             except (P.ParseError, NotAWebPage):
                 db.rollback()
                 errors += 1
+        _match_new_players()
         return {"pages": done, "errors": errors}
 
 

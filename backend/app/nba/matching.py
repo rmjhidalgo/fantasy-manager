@@ -32,12 +32,20 @@ def _initial_last(n: str) -> str | None:
     return f"{words[0][0]} {words[-1]}" if len(words) >= 2 else None
 
 
-def match_all() -> int:
+def match_new() -> int:
+    """Match Yahoo players that have no link yet (e.g. just imported from a saved page), leaving existing links alone.
+    Without NBA data yet there's nothing to match against; the next NBA download does it."""
+    return match_all(only_new=True)
+
+
+def match_all(only_new: bool = False) -> int:
     """(Re)match every Yahoo player without a manual link. Returns how many remain unmatched."""
     from app.nba.sync import norm_team
 
     with SessionLocal() as db:
         nba = db.scalars(select(NbaPlayer)).all()
+        if only_new and not nba:
+            return 0
         by_name: dict[str, list[NbaPlayer]] = defaultdict(list)
         by_initial: dict[str, list[NbaPlayer]] = defaultdict(list)
         for p in nba:
@@ -47,7 +55,8 @@ def match_all() -> int:
             if key:
                 by_initial[key].append(p)
 
-        manual = {m.yahoo_id for m in db.scalars(select(PlayerMap).where(PlayerMap.method != "auto"))}
+        keep = select(PlayerMap) if only_new else select(PlayerMap).where(PlayerMap.method != "auto")
+        manual = {m.yahoo_id for m in db.scalars(keep)}
         unmatched = 0
         for yp in db.scalars(select(Player)).all():
             if yp.id in manual:
