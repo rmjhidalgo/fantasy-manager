@@ -143,7 +143,8 @@ export default function SettingsPage({ onChange }: { onChange: () => void }) {
         <h3 className="mb-1 mt-5 text-sm font-semibold">What Claude can read</h3>
         <p className="text-sm text-slate-500">
           Teams and data freshness, your roster, the matchup, best lineup, alerts, suggested moves (A–D), free agent search, the
-          streaming plan and the move log.
+          streaming plan, the move log, trade analysis and trade ideas, the schedule grid, player comparisons, opponent scouting
+          and your scoring profile.
         </p>
       </section>
     </div>

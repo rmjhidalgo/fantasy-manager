@@ -228,6 +228,128 @@ def get_move_log() -> dict:
     }
 
 
+# ---------------------------------------------------------------- strategy
+
+def _find_rostered(teams: list[dict], name: str) -> tuple[dict, dict]:
+    """(team, player) for a rostered player, by (part of) his name."""
+    key = name.strip().lower()
+    hits = [(t, p) for t in teams for p in t["players"] if key in p["name"].lower()]
+    exact = [(t, p) for t, p in hits if p["name"].lower() == key]
+    hits = exact or hits
+    if not hits:
+        raise ValueError(f"No rostered player matches '{name}'.")
+    if len({p["id"] for _, p in hits}) > 1:
+        raise ValueError(f"'{name}' matches several players: {', '.join(p['name'] for _, p in hits[:6])}. Be more specific.")
+    return hits[0]
+
+
+@mcp.tool(annotations=READ_ONLY)
+def analyze_trade(give: list[str], get: list[str], horizon: Literal["A", "B", "C", "D"] = "C") -> dict:
+    """Points each team's lineups gain or lose from a trade over a horizon (A this week, B next week, C next 5 weeks,
+    D playoffs). give = the user's players (names), get = players from ONE other team. Counts the 2-day review period
+    and drops needed to fit roster spots."""
+    teams = _get("/api/teams")["teams"]
+    me = next(t for t in teams if t["is_me"])
+    give_ids = []
+    for n in give:
+        t, p = _find_rostered([me], n)
+        give_ids.append(p["id"])
+    others = [t for t in teams if not t["is_me"]]
+    got = [_find_rostered(others, n) for n in get]
+    if len({t["id"] for t, _ in got}) != 1:
+        raise ValueError("The players to get must all be on the same team.")
+    d = _get("/api/trade/analyze", other_team=got[0][0]["id"], give=give_ids, get=[p["id"] for _, p in got], horizon=horizon)
+
+    def side(s: dict) -> dict:
+        return {"team": s["name"], "points_change": s["gain"], "drops_needed": [x["name"] for x in s["drops"]]}
+
+    return {
+        "horizon": f"{d['horizon']} ({d['label']})", "takes_effect": d["effective"], "trade_deadline": d["deadline"],
+        "verdict": d["verdict"], "me": side(d["my_team"]), "them": side(d["their_team"]),
+        "players": [{"side": s, "name": p["name"], "status": p["status"], "proj_fp_per_game": p["fpts"], "games_in_horizon": p["games"]}
+                    for s, ps in (("give", d["give"]), ("get", d["get"])) for p in ps],
+        "notes": d["notes"],
+    }
+
+
+@mcp.tool(annotations=READ_ONLY)
+def find_trades(horizon: Literal["A", "B", "C", "D"] = "C", limit: int = 8) -> dict:
+    """1-for-1 trade ideas where BOTH teams' lineups gain points over the horizon (so the other manager has a reason to accept).
+    Never offers the user's untouchable players."""
+    d = _get("/api/trade/find", horizon=horizon, limit=max(1, min(limit, 30)))
+    return {
+        "horizon": f"{d['horizon']} ({d['label']})", "takes_effect": d["effective"], "trade_deadline": d["deadline"],
+        "ideas": [{"with": t["team"]["name"], "give": t["give"]["name"], "get": t["get"]["name"], "my_gain": t["my_gain"],
+                   "their_gain": t["their_gain"], "get_status": t["get"]["status"]} for t in d["trades"]] or "No trade helps both sides.",
+        "notes": d["notes"],
+    }
+
+
+@mcp.tool(annotations=READ_ONLY)
+def get_schedule(team: str | None = None) -> dict:
+    """Games per NBA team for each remaining matchup week (back-to-backs and playoff weeks marked), and how many games
+    the user's roster has each week. team = an NBA team code (e.g. LAL) to see just that team."""
+    d = _get("/api/schedule")
+    labels = [c["label"] + (" (playoffs)" if c["playoff"] else "") for c in d["columns"]]
+    rows = [r for r in d["teams"] if not team or r["team"] == team.upper()]
+    return {
+        "weeks": labels,
+        "my_roster_games": dict(zip(labels, d["my_games"], strict=True)),
+        "teams": {r["team"]: {"games": r["games"], "back_to_backs": r["back_to_backs"], "playoff_games": r["playoff_games"],
+                              "my_players": r["my_players"]} for r in rows},
+        "most_playoff_games": sorted(((r["playoff_games"], r["team"]) for r in d["teams"]), reverse=True)[:6],
+        "notes": d["notes"],
+    }
+
+
+@mcp.tool(annotations=READ_ONLY)
+def compare_players(names: list[str]) -> dict:
+    """Compare up to 4 players (any NBA player): projection, recent form (last 7/14/30 days and season), minutes,
+    consistency (floor/ceiling), last 10 games, games coming up, and who owns them."""
+    ids = []
+    for n in names[:4]:
+        hits = _get("/api/players/search", q=n)["players"]
+        if not hits:
+            raise ValueError(f"No player matches '{n}'.")
+        ids.append(hits[0]["id"])
+    d = _get("/api/players/compare", ids=ids)
+    return {"players": [{
+        "name": p["name"], "nba_team": p["nba_team"], "positions": p["positions"], "status": p["status"], "owner": p["owner"],
+        "proj_fp_per_game": p["fpts"], "fp_per_game": p["window_fp"], "minutes_last_14_days": p["recent_mpg"],
+        "minutes_season": p["season_mpg"], "games_played": p["games_played"], "spread": p["sd"], "floor": p["floor"],
+        "ceiling": p["ceiling"], "last_10_fp": [g["fp"] for g in p["last_games"]], "games_upcoming": p["games"],
+    } for p in d["players"]], "windows": d["windows"]}
+
+
+@mcp.tool(annotations=READ_ONLY)
+def scout_opponent() -> dict:
+    """This week's opponent (and next week's, if known): record, roster with projections and games left, injuries,
+    adds used this week and recent transactions."""
+    d = _get("/api/scouting")
+    if not d["opponents"]:
+        return {"note": "No matchup imported yet (save the Yahoo Matchup page)."}
+    return {"opponents": [{
+        "week": o["week"], "team": o["team"], "score": o["score"], "games_left": o["games_left"],
+        "adds_this_week": o["adds_this_week"],
+        "injured_or_missing": [f"{r['name']} ({r['status'] or 'missed ' + str(r['missed_streak']) + ' games'})" for r in o["injured"]],
+        "roster": [{"name": r["name"], "proj_fp": r["fpts"], "games_left": r["games_left"], "status": r["status"]} for r in o["roster"]],
+        "recent_transactions": [t["description"] for t in o["transactions"]],
+    } for o in d["opponents"]]}
+
+
+@mcp.tool(annotations=READ_ONLY)
+def get_scoring_profile() -> dict:
+    """Where the user's fantasy points come from (points, rebounds, assists, steals, blocks, threes, turnovers) compared
+    with the league average, the user's rank in each (1 = best), and how much each stat is worth in this league."""
+    d = _get("/api/scoring-profile")
+    me = next((t for t in d["teams"] if t["is_me"]), None)
+    return {
+        "stat_weights_and_league_share": d["categories"],
+        "my_fp_per_category": me and me["by_category"], "league_average": d["league_average"], "my_rank": d["my_rank"],
+        "teams_by_total": [(t["name"], t["total"]) for t in d["teams"]], "note": d["note"],
+    }
+
+
 def main() -> None:
     mcp.run("stdio")
 

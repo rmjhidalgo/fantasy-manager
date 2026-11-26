@@ -296,6 +296,104 @@ export type AssistantStatus = {
   result?: { path: string; backup?: string; removed?: boolean };
 };
 
+export type TeamRoster = {
+  id: number;
+  name: string | null;
+  is_me: boolean;
+  players: { id: number; name: string; nba_team: string | null; positions: string[]; status: string | null; fpts: number }[];
+};
+
+export type TradePlayer = {
+  id: number;
+  name: string;
+  nba_team: string | null;
+  positions: string[];
+  status: string | null;
+  fpts: number;
+  games: number;
+  value: number;
+};
+
+export type TradeSide = { id: number; name: string | null; gain: number; before: number; after: number; drops: TradePlayer[] };
+
+export type TradeAnalysis = {
+  horizon: Horizon;
+  label: string;
+  days: string[];
+  effective: string;
+  deadline: string | null;
+  my_team: TradeSide;
+  their_team: TradeSide;
+  give: TradePlayer[];
+  get: TradePlayer[];
+  verdict: string;
+  notes: string[];
+  yahoo_url: string;
+};
+
+export type TradeIdeas = {
+  horizon: Horizon;
+  label: string;
+  effective: string;
+  deadline: string | null;
+  notes: string[];
+  trades: { team: { id: number; name: string | null }; give: TradePlayer; get: TradePlayer; my_gain: number; their_gain: number; yahoo_url: string }[];
+};
+
+export type ScheduleGrid = {
+  columns: { label: string; start: string; end: string; playoff: boolean; current: boolean }[];
+  teams: { team: string; games: number[]; back_to_backs: number[]; playoff_games: number; my_players: string[] }[];
+  my_games: number[];
+  notes: string[];
+};
+
+export type SearchHit = { id: number; name: string; nba_team: string | null; positions: string[]; owner: string };
+
+export type ComparedPlayer = {
+  id: number;
+  name: string;
+  nba_team: string | null;
+  positions: string[];
+  positions_estimated: boolean;
+  status: string | null;
+  owner: string;
+  fpts: number;
+  play_prob: number;
+  window_fp: { L7?: number | null; L14?: number | null; L30?: number | null; S?: number | null };
+  recent_mpg: number | null;
+  season_mpg: number | null;
+  games_played: number;
+  sd: number | null;
+  floor: number | null;
+  ceiling: number | null;
+  missed_streak: number;
+  last_games: { date: string; fp: number; min: number | null }[];
+  games: Record<string, number>;
+  pct_rostered: number | null;
+};
+
+export type Scouting = {
+  week: number | null;
+  opponents: {
+    week: number;
+    team: { id: number; name: string | null; rank: number | null; record: string | null; points_for: number | null };
+    score: { me: number | null; them: number | null; as_of: string | null };
+    roster: { name: string; nba_team: string | null; positions: string[]; status: string | null; fpts: number; games_left: number; on_il: boolean; missed_streak: number }[];
+    injured: Scouting["opponents"][number]["roster"];
+    games_left: number;
+    adds_this_week: number | null;
+    transactions: { when: string; description: string; moves: { name: string; action: "add" | "drop" }[] }[];
+  }[];
+};
+
+export type ScoringProfile = {
+  categories: { key: string; weight: number; league_share: number }[];
+  teams: { team_id: number; name: string | null; is_me: boolean; total: number; by_category: Record<string, number>; share: Record<string, number> }[];
+  league_average: Record<string, number>;
+  my_rank: Record<string, number>;
+  note?: string;
+};
+
 export type Horizon = "A" | "B" | "C" | "D";
 
 export type Suggestions = {
@@ -428,6 +526,22 @@ export const api = {
   },
   outlook: () => fetch("/api/outlook").then((r) => json<Outlook>(r)),
   lineup: (day?: string) => fetch(`/api/lineup${day ? `?day=${day}` : ""}`).then((r) => json<LineupDay>(r)),
+  teams: () => fetch("/api/teams").then((r) => json<{ teams: TeamRoster[] }>(r)),
+  analyzeTrade: (other_team: number, give: number[], get: number[], horizon: Horizon) =>
+    fetch("/api/trade/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ other_team, give, get, horizon }),
+    }).then((r) => json<TradeAnalysis>(r)),
+  findTrades: (horizon: Horizon) => fetch(`/api/trade/find?horizon=${horizon}`).then((r) => json<TradeIdeas>(r)),
+  schedule: () => fetch("/api/schedule").then((r) => json<ScheduleGrid>(r)),
+  searchPlayers: (q: string) => fetch(`/api/players/search?q=${encodeURIComponent(q)}`).then((r) => json<{ players: SearchHit[] }>(r)),
+  comparePlayers: (ids: number[]) =>
+    fetch(`/api/players/compare?${ids.map((i) => `ids=${i}`).join("&")}`).then((r) =>
+      json<{ players: ComparedPlayer[]; windows: Record<string, [string, string]> }>(r),
+    ),
+  scouting: () => fetch("/api/scouting").then((r) => json<Scouting>(r)),
+  scoringProfile: () => fetch("/api/scoring-profile").then((r) => json<ScoringProfile>(r)),
   logMove: (m: MoveLogInput) =>
     fetch("/api/move-log", {
       method: "POST",

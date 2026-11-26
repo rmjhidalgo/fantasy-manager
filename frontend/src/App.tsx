@@ -8,6 +8,7 @@ import MatchupPage from "./pages/MatchupPage";
 import OverviewPage, { type NavTarget } from "./pages/OverviewPage";
 import MovesPage from "./pages/MovesPage";
 import SettingsPage from "./pages/SettingsPage";
+import StrategyPage from "./pages/StrategyPage";
 import StreamingPage from "./pages/StreamingPage";
 import SuggestPage from "./pages/SuggestPage";
 
@@ -20,6 +21,7 @@ const TABS: [Tab, string][] = [
   ["lineup", "Lineup"],
   ["free-agents", "Free agents"],
   ["streaming", "Streaming"],
+  ["strategy", "Strategy"],
   ["moves", "Move log"],
   ["import", "Import & data"],
   ["settings", "Settings"],
@@ -151,6 +153,7 @@ export default function App() {
         {tab === "lineup" && <LineupPage outlook={outlook} />}
         {tab === "free-agents" && <FreeAgentsPage key={version} />}
         {tab === "streaming" && <StreamingPage key={version} />}
+        {tab === "strategy" && <StrategyPage key={version} />}
         {tab === "moves" && <MovesPage key={version} />}
         {tab === "import" && <ImportPage onImported={refresh} />}
         {tab === "settings" && <SettingsPage onChange={loadAssistant} />}
