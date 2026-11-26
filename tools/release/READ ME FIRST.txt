@@ -1,0 +1,59 @@
+FANTASY MANAGER - for Yahoo Fantasy Basketball (head-to-head points leagues)
+==========================================================================
+
+A free helper that runs on your own Windows PC: best daily lineups, pickups,
+streaming, trades and playoff odds for YOUR league. Nothing to buy, no account,
+and it never asks for your Yahoo password.
+
+
+INSTALL (2 minutes)
+-------------------
+1. Right-click the zip file you received -> "Extract All..." -> pick a place
+   you'll remember, e.g. your Documents folder.
+   (Don't run it from inside the zip.)
+2. Open the extracted "FantasyManager" folder.
+3. Double-click "Start Fantasy Manager".
+   - If Windows says "Windows protected your PC", click "More info" ->
+     "Run anyway". (It says this for any program that isn't from a big company.)
+   - The first start can take up to a minute.
+4. Your browser opens the app. Follow the welcome steps on screen.
+
+Tip: right-click "Start Fantasy Manager" -> "Send to" -> "Desktop (create shortcut)"
+to start it from your desktop next time.
+
+
+EVERY DAY
+---------
+- Start the app with "Start Fantasy Manager".
+- Save a few Yahoo pages (Ctrl+S) into your pages folder. The app's
+  "Import & data" tab shows exactly which pages, and how often.
+- To stop the app: close the small "Fantasy Manager" window in the taskbar,
+  or double-click "Stop Fantasy Manager".
+
+
+HOW IT WORKS
+------------
+- You save pages from the Yahoo Fantasy website with Ctrl+S. The app reads
+  those files. It never logs in to Yahoo and never changes your team: you make
+  every move on Yahoo yourself.
+- NBA schedules and box scores are downloaded from NBA.com automatically.
+- Your league data stays on this PC (in %LOCALAPPDATA%\Fantasy Manager),
+  with a backup copy every day. Nobody else can see it.
+
+
+NEW VERSION
+-----------
+When the app shows "Update available": download the new zip, extract it, and
+start the new "Start Fantasy Manager". Your data is kept. You can delete the old
+folder afterwards. (If you connected Claude Desktop, press "Install in Claude
+Desktop" once more on the Settings tab.)
+
+
+UNINSTALL
+---------
+Delete the FantasyManager folder. To also delete your league data, delete the
+folder "%LOCALAPPDATA%\Fantasy Manager" (paste that into the File Explorer
+address bar).
+
+
+Not affiliated with Yahoo or the NBA. Free, for personal use.

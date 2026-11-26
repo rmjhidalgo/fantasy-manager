@@ -253,7 +253,12 @@ export default function SettingsPage({ onChange }: { onChange: () => void }) {
         </div>
 
         <h3 className="mb-1 text-sm font-semibold">1. Connect Claude Desktop</h3>
-        {s.installed ? (
+        {s.installed && s.outdated ? (
+          <Notice tone="warn">
+            Claude Desktop is set up for another copy of this app (probably an older version). Press <b>Update in Claude Desktop</b>,
+            then restart Claude Desktop.
+          </Notice>
+        ) : s.installed ? (
           <Notice tone="ok">
             ✓ Installed in Claude Desktop's settings ({s.config_path}). Restart Claude Desktop if you just installed it, then ask e.g.{" "}
             <i>"Using Fantasy Manager, who should I pick up this week?"</i>
@@ -267,6 +272,11 @@ export default function SettingsPage({ onChange }: { onChange: () => void }) {
           {!s.installed && s.config_path && (
             <button className={btn} disabled={busy} onClick={() => run(api.installAssistant(), () => "Installed. Quit and reopen Claude Desktop to load it.")}>
               Install in Claude Desktop
+            </button>
+          )}
+          {s.installed && s.outdated && (
+            <button className={btn} disabled={busy} onClick={() => run(api.installAssistant(), () => "Updated. Quit and reopen Claude Desktop.")}>
+              Update in Claude Desktop
             </button>
           )}
           {s.installed && (

@@ -5,8 +5,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
-from app import __version__, assistant, config
+from app import __version__, assistant, config, maintenance
 from app.api.assistant import router as assistant_router
 from app.api.engine import router as engine_router
 from app.api.imports import router as imports_router
@@ -28,9 +29,11 @@ async def lifespan(_app: FastAPI):
     if BACKGROUND:
         start_saved_watcher()
         sync.start_background()  # downloads NBA data now if it's older than 3 hours, then keeps it fresh
+        maintenance.start_background()  # daily database backup
     yield
     watcher.stop()
     sync.stop_background()
+    maintenance.stop_background()
 
 
 app = FastAPI(title="Fantasy Manager", version=__version__, lifespan=lifespan)
@@ -65,3 +68,17 @@ def health() -> dict:
         "database": "ok" if db_ok() else "error",
         "data_dir": str(config.DATA_DIR),
     }
+
+
+@app.get("/api/version")
+def version() -> dict:
+    """This copy's version and whether a newer one is published (for the "Update available" note)."""
+    if not BACKGROUND:  # tests: no internet
+        return {"current": __version__, "latest": None, "update_available": False, "download_url": config.DOWNLOAD_URL}
+    return maintenance.version_info()
+
+
+# The web interface itself (built screens), when present: http://localhost:8000 is then the whole app.
+# Mounted last, so every /api address above takes precedence.
+if (config.FRONTEND_DIST / "index.html").is_file():
+    app.mount("/", StaticFiles(directory=config.FRONTEND_DIST, html=True), name="ui")

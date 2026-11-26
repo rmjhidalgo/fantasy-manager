@@ -38,6 +38,9 @@ venv/
 node_modules/
 dist/
 
+# Built packages for friends (tools/build_release.ps1); tools/release/ holds their templates and is tracked
+/release/
+
 # Editors / OS
 .vscode/
 .idea/

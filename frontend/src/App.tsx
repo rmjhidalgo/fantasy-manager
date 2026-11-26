@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { maybeNotifySummary, notifyNew } from "./alerts";
-import { api, type AlertItem, type DailySummary, type League, type Outlook, type Overview } from "./api";
+import { api, type AlertItem, type DailySummary, type League, type Outlook, type Overview, type VersionInfo } from "./api";
 import FreeAgentsPage from "./pages/FreeAgentsPage";
 import ImportPage from "./pages/ImportPage";
 import LineupPage from "./pages/LineupPage";
@@ -42,6 +42,13 @@ export default function App() {
   const [version, setVersion] = useState(0); // bumps when data changes, so pages reload
   const [askClaude, setAskClaude] = useState(false);
   const [summary, setSummary] = useState<DailySummary | null>(null);
+  const [update, setUpdate] = useState<VersionInfo | null>(null);
+  useEffect(() => {
+    api
+      .version()
+      .then(setUpdate)
+      .catch(() => {});
+  }, []);
 
   const loadAssistant = useCallback(() => {
     api
@@ -158,7 +165,18 @@ export default function App() {
             Can't reach the backend. Make sure it's running (start.bat starts both parts).
           </p>
         )}
-        {tab === "overview" && <OverviewPage data={overview} outlook={outlook} alerts={alerts} summary={summary} onNavigate={setTab} />}
+        {update?.update_available && (
+          <p className="mb-4 rounded-md bg-violet-50 p-3 text-sm text-violet-900 dark:bg-violet-950 dark:text-violet-200">
+            <b>Update available:</b> version {update.latest} (you have {update.current}).{" "}
+            <a href={update.download_url} target="_blank" rel="noreferrer" className="underline">
+              Download it
+            </a>
+            , unzip it, and start the new version. Your data is kept.
+          </p>
+        )}
+        {tab === "overview" && (
+          <OverviewPage data={overview} outlook={outlook} alerts={alerts} summary={summary} onNavigate={setTab} onRefresh={refresh} />
+        )}
         {tab === "suggest" && <SuggestPage key={version} outlook={outlook} />}
         {tab === "matchup" && <MatchupPage version={version} />}
         {tab === "lineup" && <LineupPage outlook={outlook} />}

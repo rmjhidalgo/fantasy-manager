@@ -101,14 +101,23 @@ def find_config() -> Path | None:
     return next((p for p in config_candidates() if p.is_file()), None)
 
 
-def installed(path: Path | None = None) -> bool:
-    path = path or find_config()
+def _entry_in(path: Path | None) -> dict | None:
     if not path:
-        return False
+        return None
     try:
-        return SERVER_NAME in (json.loads(path.read_text(encoding="utf-8")).get("mcpServers") or {})
+        return (json.loads(path.read_text(encoding="utf-8")).get("mcpServers") or {}).get(SERVER_NAME)
     except (OSError, ValueError):
-        return False
+        return None
+
+
+def installed(path: Path | None = None) -> bool:
+    return _entry_in(path or find_config()) is not None
+
+
+def outdated(path: Path | None = None) -> bool:
+    """Installed, but pointing at another copy of the app (e.g. after unzipping a new version)."""
+    entry = _entry_in(path or find_config())
+    return entry is not None and entry != server_entry()
 
 
 def install(path: Path | None = None) -> dict:
@@ -156,6 +165,7 @@ def status() -> dict:
         "last_used": lu.isoformat() + "Z" if lu else None,
         "config_path": str(cfg) if cfg else None,
         "installed": installed(cfg),
+        "outdated": outdated(cfg),
         "server_entry": {SERVER_NAME: server_entry()},
         "claude_code_command": claude_code_command(),
     }

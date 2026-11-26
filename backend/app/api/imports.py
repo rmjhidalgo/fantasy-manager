@@ -2,11 +2,13 @@
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
+from app import config
 from app.db import SessionLocal
 from app.db.models import (
     AppSetting,
@@ -89,7 +91,12 @@ def import_checklist() -> dict:
             return {"league": None, "setup": [item("settings", None, None), item("schedule", None, None, teams_done=0, teams_total=0)],
                     "regular": []}
         teams = {t.team_id: t.name for t in db.scalars(select(FantasyTeam).where(FantasyTeam.league_id == lg.id))}
-        sched_teams = set(db.scalars(select(ScheduleWeek.team_id).where(ScheduleWeek.league_id == lg.id).distinct()))
+        # A team counts as done when every week of its season is known (one team's page also fills in
+        # a few weeks for each of its opponents, which isn't enough on its own).
+        weeks_per_team = dict(db.execute(select(ScheduleWeek.team_id, func.count()).where(ScheduleWeek.league_id == lg.id)
+                                         .group_by(ScheduleWeek.team_id)).all())
+        season_weeks = max(weeks_per_team.values(), default=0)
+        sched_teams = {t for t, n in weeks_per_team.items() if n == season_weeks and season_weeks > 0}
         sched_at = db.scalar(select(func.max(ScheduleWeek.as_of)).where(ScheduleWeek.league_id == lg.id))
         missing_teams = sorted(n or f"Team {t}" for t, n in teams.items() if t not in sched_teams)
         schedule = item("schedule", sched_at if sched_teams else None, None,
@@ -148,18 +155,24 @@ def list_imports(limit: int = 50) -> dict:
 
 class WatchFolderBody(BaseModel):
     folder: str | None
+    create: bool = False  # make the folder if it doesn't exist yet (first-run setup)
 
 
 @router.get("/watch-folder")
 def get_watch_folder() -> dict:
     with SessionLocal() as db:
         saved = _get_setting(db, "watch_folder")
-    return {"configured": saved, **watcher.status(), "recent": watcher.recent[:20]}
+    return {"configured": saved, "suggested": str(config.default_pages_folder()), **watcher.status(), "recent": watcher.recent[:20]}
 
 
 @router.put("/watch-folder")
 def set_watch_folder(body: WatchFolderBody) -> dict:
     folder = (body.folder or "").strip().strip('"') or None
+    if folder and body.create:
+        try:
+            Path(folder).expanduser().mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            raise HTTPException(400, f"Couldn't create that folder: {e}") from e
     try:
         watcher.start(folder)
     except ValueError as e:

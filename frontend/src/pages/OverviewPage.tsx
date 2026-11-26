@@ -1,6 +1,7 @@
 import type { AlertItem, DailySummary, Outlook, Overview } from "../api";
 import AlertsCard from "../components/AlertsCard";
 import SummaryCard from "../components/SummaryCard";
+import Welcome from "../components/Welcome";
 import { formatWhen, hoursOld } from "../time";
 import { card, dayLabel } from "../ui";
 
@@ -22,24 +23,18 @@ export default function OverviewPage({
   alerts,
   summary,
   onNavigate,
+  onRefresh,
 }: {
   data: Overview | null;
   outlook: Outlook | null;
   alerts: AlertItem[] | null;
   summary: DailySummary | null;
   onNavigate: (t: NavTarget) => void;
+  onRefresh: () => void;
 }) {
-  const onGoImport = () => onNavigate("import");
   if (!data) return <p className="text-slate-500">Loading…</p>;
   if (!data.league) {
-    return (
-      <div className={`${card} text-center`}>
-        <p className="mb-3">No league data yet.</p>
-        <button onClick={onGoImport} className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
-          Import your saved Yahoo pages
-        </button>
-      </div>
-    );
+    return <Welcome onRefresh={onRefresh} />;
   }
   const f = data.freshness!;
   const p = data.players!;

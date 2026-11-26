@@ -92,6 +92,15 @@ def test_import_checklist(season):
     assert keys == ["settings", "schedule", "my_team", "matchup", "league_home", "available", "taken"]
     sched = c["setup"][1]
     assert sched["status"] == "missing" and sched["teams_total"] == 4
+    with SessionLocal() as db:  # Mine's whole season saved: Mine is done; its opponents only partly known
+        for w, opp in ((1, 20), (2, 30), (3, 40)):
+            for a, b in ((10, opp), (opp, 10)):
+                db.add(ScheduleWeek(league_id=1, week=w, team_id=a, opp_team_id=b, as_of=NOW))
+        db.commit()
+    with TestClient(app) as client:
+        sched = client.get("/api/import/checklist").json()["setup"][1]
+    assert sched["status"] == "partial" and sched["teams_done"] == 1
+    assert sched["missing_teams"] == ["Rival team", "Strong", "Weak team"]
 
 
 def test_summary_lists_matchup_moves_and_odds(season):

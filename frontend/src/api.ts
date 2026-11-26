@@ -23,6 +23,7 @@ export type ImportHistoryRow = {
 
 export type WatchFolder = {
   configured: string | null;
+  suggested?: string;
   folder: string | null;
   running: boolean;
   recent: ImportResult[];
@@ -293,6 +294,7 @@ export type AssistantStatus = {
   last_used: string | null;
   config_path: string | null;
   installed: boolean;
+  outdated?: boolean;
   server_entry: Record<string, unknown>;
   claude_code_command: string;
   result?: { path: string; backup?: string; removed?: boolean };
@@ -664,10 +666,13 @@ export const api = {
       body: JSON.stringify({ yahoo_id, nba_id }),
     }).then((r) => json<{ ok: boolean }>(r)),
   watchFolder: () => fetch("/api/watch-folder").then((r) => json<WatchFolder>(r)),
-  setWatchFolder: (folder: string | null) =>
+  setWatchFolder: (folder: string | null, create = false) =>
     fetch("/api/watch-folder", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folder }),
+      body: JSON.stringify({ folder, create }),
     }).then((r) => json<WatchFolder>(r)),
+  version: () => fetch("/api/version").then((r) => json<VersionInfo>(r)),
 };
+
+export type VersionInfo = { current: string; latest: string | null; update_available: boolean; download_url: string };
