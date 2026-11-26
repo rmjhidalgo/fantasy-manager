@@ -1,121 +1,98 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { api, type League, type Overview } from "./api";
+import ImportPage from "./pages/ImportPage";
+import OverviewPage from "./pages/OverviewPage";
 
-type Health = {
-  status: string;
-  version: string;
-  database: string;
-  data_dir: string;
-};
+type Tab = "overview" | "import";
 
-type State =
-  | { kind: "loading" }
-  | { kind: "ok"; health: Health }
-  | { kind: "error"; message: string };
-
-// Screens planned for later milestones (PLAN.md §9).
-const COMING_SOON = [
-  "Import",
-  "Dashboard",
-  "Matchup",
-  "Lineup",
-  "Free agents",
-  "Suggested moves",
-  "Trades",
-];
+type Health = { status: string; version: string; database: string };
 
 export default function App() {
-  const [state, setState] = useState<State>({ kind: "loading" });
+  const [tab, setTab] = useState<Tab>("overview");
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [leagues, setLeagues] = useState<League[]>([]);
+  const [health, setHealth] = useState<Health | null>(null);
+  const [backendDown, setBackendDown] = useState(false);
 
-  const check = () => {
-    setState({ kind: "loading" });
-    fetch("/api/health")
-      .then((r) => {
-        if (!r.ok) throw new Error(`Backend replied ${r.status}`);
-        return r.json() as Promise<Health>;
+  const refresh = useCallback(() => {
+    api
+      .overview()
+      .then((o) => {
+        setOverview(o);
+        setBackendDown(false);
       })
-      .then((health) => setState({ kind: "ok", health }))
-      .catch((e: unknown) =>
-        setState({ kind: "error", message: e instanceof Error ? e.message : String(e) }),
-      );
-  };
+      .catch(() => setBackendDown(true));
+    api.leagues().then((r) => setLeagues(r.leagues)).catch(() => {});
+  }, []);
 
-  useEffect(check, []);
+  useEffect(() => {
+    refresh();
+    fetch("/api/health")
+      .then((r) => r.json())
+      .then(setHealth)
+      .catch(() => setBackendDown(true));
+  }, [refresh]);
+
+  const active = leagues.find((l) => l.active);
 
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
-        <div className="mx-auto flex max-w-5xl items-center justify-between">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
           <h1 className="text-lg font-semibold">🏀 Fantasy Manager</h1>
-          <span className="text-sm text-slate-500">
-            {state.kind === "ok" ? `v${state.health.version}` : ""}
-          </span>
+          {leagues.length > 0 && (
+            <select
+              value={active?.id ?? ""}
+              onChange={(e) => api.setActiveLeague(Number(e.target.value)).then(refresh)}
+              className="rounded-md border border-slate-300 bg-transparent px-2 py-1 text-sm dark:border-slate-700"
+              title="Switch team"
+            >
+              {leagues.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.my_team_name ?? "My team"} · {l.name ?? `League ${l.id}`}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
+        <nav className="mx-auto mt-3 flex max-w-5xl gap-1">
+          {(
+            [
+              ["overview", "Overview"],
+              ["import", "Import"],
+            ] as [Tab, string][]
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`rounded-md px-3 py-1.5 text-sm ${
+                tab === key
+                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                  : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-6 px-4 py-6">
-        <section className="rounded-lg border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-semibold">Setup check</h2>
-            <button
-              onClick={check}
-              className="rounded-md border border-slate-300 px-3 py-1 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-            >
-              Check again
-            </button>
-          </div>
-
-          {state.kind === "loading" && <p className="text-slate-500">Checking…</p>}
-
-          {state.kind === "error" && (
-            <div className="text-red-600 dark:text-red-400">
-              <p className="font-medium">Can't reach the backend.</p>
-              <p className="text-sm">
-                {state.message}. Make sure it's running (start.bat starts both parts).
-              </p>
-            </div>
-          )}
-
-          {state.kind === "ok" && (
-            <ul className="space-y-2 text-sm">
-              <StatusRow label="Backend" ok={state.health.status === "ok"} />
-              <StatusRow label="Database" ok={state.health.database === "ok"} />
-              <li className="flex justify-between gap-4">
-                <span>Data folder</span>
-                <code className="truncate text-slate-500">{state.health.data_dir}</code>
-              </li>
-            </ul>
-          )}
-        </section>
-
-        <section className="rounded-lg border border-dashed border-slate-300 p-5 dark:border-slate-700">
-          <h2 className="mb-2 font-semibold">Coming next</h2>
-          <p className="mb-3 text-sm text-slate-500">
-            These screens are built in the next milestones. Milestone 1 starts with importing your
-            saved Yahoo pages.
+      <main className="mx-auto max-w-5xl px-4 py-6">
+        {backendDown && (
+          <p className="mb-4 rounded-md bg-red-50 p-3 text-red-700 dark:bg-red-950 dark:text-red-300">
+            Can't reach the backend. Make sure it's running (start.bat starts both parts).
           </p>
-          <div className="flex flex-wrap gap-2">
-            {COMING_SOON.map((name) => (
-              <span
-                key={name}
-                className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-              >
-                {name}
-              </span>
-            ))}
-          </div>
-        </section>
+        )}
+        {tab === "overview" ? (
+          <OverviewPage data={overview} onGoImport={() => setTab("import")} />
+        ) : (
+          <ImportPage onImported={refresh} />
+        )}
       </main>
-    </div>
-  );
-}
 
-function StatusRow({ label, ok }: { label: string; ok: boolean }) {
-  return (
-    <li className="flex justify-between">
-      <span>{label}</span>
-      <span className={ok ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
-        {ok ? "✓ OK" : "✗ Problem"}
-      </span>
-    </li>
+      <footer className="mx-auto max-w-5xl px-4 pb-6 text-xs text-slate-400">
+        {health ? `v${health.version} · database ${health.database}` : ""}
+      </footer>
+    </div>
   );
 }

@@ -5,16 +5,22 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import __version__, config
+from app.api.imports import router as imports_router
+from app.api.imports import start_saved_watcher
 from app.db import db_ok, init_db
+from app.importer import watcher
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+    start_saved_watcher()
     yield
+    watcher.stop()
 
 
 app = FastAPI(title="Fantasy Manager", version=__version__, lifespan=lifespan)
+app.include_router(imports_router)
 
 
 @app.get("/api/health")

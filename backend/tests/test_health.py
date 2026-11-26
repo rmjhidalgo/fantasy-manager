@@ -1,12 +1,8 @@
 import os
-import tempfile
 
-# Use a throwaway data folder so tests never touch real data.
-os.environ["FM_DATA_DIR"] = tempfile.mkdtemp(prefix="fm_test_")
+from fastapi.testclient import TestClient
 
-from fastapi.testclient import TestClient  # noqa: E402
-
-from app.main import app  # noqa: E402
+from app.main import app
 
 
 def test_health():
